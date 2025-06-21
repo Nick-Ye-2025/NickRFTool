@@ -1,0 +1,835 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>球坐标系信号强度动态可视化</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+    <script src="https://cdn.plot.ly/plotly-2.25.2.min.js"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#165DFF',
+                        secondary: '#7B61FF',
+                        accent: '#FF7D00',
+                        dark: '#1D2129',
+                        light: '#F2F3F5'
+                    },
+                    fontFamily: {
+                        inter: ['Inter', 'sans-serif'],
+                    },
+                }
+            }
+        }
+    </script>
+    <style type="text/tailwindcss">
+        @layer utilities {
+            .content-auto {
+                content-visibility: auto;
+            }
+            .bg-gradient-blue {
+                background: linear-gradient(135deg, #165DFF 0%, #7B61FF 100%);
+            }
+            .card-shadow {
+                box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.02);
+            }
+            .animate-pulse-slow {
+                animation: pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+            }
+        }
+    </style>
+</head>
+<body class="bg-gray-50 font-inter text-dark min-h-screen flex flex-col">
+    <!-- 导航栏 -->
+    <nav class="bg-white shadow-sm sticky top-0 z-50 transition-all duration-300">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-16">
+                <div class="flex items-center">
+                    <i class="fa fa-line-chart text-primary text-2xl mr-3"></i>
+                    <span class="text-xl font-bold text-primary">信号强度可视化</span>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <button id="playPauseBtn" class="px-3 py-1.5 bg-primary text-white rounded-md hover:bg-primary/90 transition-all flex items-center">
+                        <i class="fa fa-play mr-2"></i>
+                        <span>播放</span>
+                    </button>
+                    <button id="resetBtn" class="px-3 py-1.5 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 transition-all flex items-center">
+                        <i class="fa fa-refresh mr-2"></i>
+                        <span>重置</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- 主要内容 -->
+    <main class="flex-grow container mx-auto px-4 py-8">
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <!-- 左侧控制面板 -->
+            <div class="lg:col-span-1 space-y-6">
+                <!-- 控制面板卡片 -->
+                <div class="bg-white rounded-xl p-6 card-shadow">
+                    <h2 class="text-lg font-semibold mb-4 flex items-center">
+                        <i class="fa fa-sliders text-primary mr-2"></i>控制面板
+                    </h2>
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">动画速度</label>
+                            <input type="range" id="speedSlider" min="1" max="10" value="5" 
+                                class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-primary">
+                            <div class="flex justify-between text-xs text-gray-500 mt-1">
+                                <span>慢</span>
+                                <span>快</span>
+                            </div>
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">信号模式</label>
+                            <div class="grid grid-cols-2 gap-2">
+                                <button class="signal-mode-btn px-3 py-2 bg-primary text-white rounded-md hover:bg-primary/90 transition-all" data-mode="spherical">
+                                    <i class="fa fa-globe mr-1"></i>球面
+                                </button>
+                                <button class="signal-mode-btn px-3 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 transition-all" data-mode="dipole">
+                                    <i class="fa fa-arrows-h mr-1"></i>偶极子
+                                </button>
+                                <button class="signal-mode-btn px-3 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 transition-all" data-mode="quadrupole">
+                                    <i class="fa fa-crosshairs mr-1"></i>四极子
+                                </button>
+                                <button class="signal-mode-btn px-3 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 transition-all" data-mode="custom">
+                                    <i class="fa fa-code mr-1"></i>自定义
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <div id="customModeOptions" class="hidden">
+                            <label class="block text-sm font-medium text-gray-700 mb-2">自定义函数 (r = f(θ,φ))</label>
+                            <input type="text" id="customFunction" value="sin(theta)*cos(phi)" 
+                                class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all"
+                                placeholder="例如: sin(theta)*cos(phi)">
+                            <p class="text-xs text-gray-500 mt-1">支持的变量: theta, phi</p>
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">显示选项</label>
+                            <div class="space-y-2">
+                                <label class="flex items-center">
+                                    <input type="checkbox" id="showGrid" checked class="w-4 h-4 text-primary focus:ring-primary/50 border-gray-300 rounded">
+                                    <span class="ml-2 text-sm text-gray-700">显示网格</span>
+                                </label>
+                                <label class="flex items-center">
+                                    <input type="checkbox" id="showAxes" checked class="w-4 h-4 text-primary focus:ring-primary/50 border-gray-300 rounded">
+                                    <span class="ml-2 text-sm text-gray-700">显示坐标轴</span>
+                                </label>
+                                <label class="flex items-center">
+                                    <input type="checkbox" id="showLegend" checked class="w-4 h-4 text-primary focus:ring-primary/50 border-gray-300 rounded">
+                                    <span class="ml-2 text-sm text-gray-700">显示图例</span>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- 信息面板卡片 -->
+                <div class="bg-white rounded-xl p-6 card-shadow">
+                    <h2 class="text-lg font-semibold mb-4 flex items-center">
+                        <i class="fa fa-info-circle text-primary mr-2"></i>信息面板
+                    </h2>
+                    <div class="space-y-3 text-sm">
+                        <div class="flex justify-between">
+                            <span class="text-gray-600">当前时间</span>
+                            <span id="currentTime" class="font-medium">0.00s</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-gray-600">最大信号强度</span>
+                            <span id="maxSignal" class="font-medium">-20 dBm</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-gray-600">最小信号强度</span>
+                            <span id="minSignal" class="font-medium">-100 dBm</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-gray-600">信号覆盖面积</span>
+                            <span id="coverageArea" class="font-medium">78.5%</span>
+                        </div>
+                        <div class="pt-2">
+                            <div class="text-xs text-gray-500 mb-1">信号强度分布</div>
+                            <div class="h-4 bg-gray-200 rounded-full overflow-hidden">
+                                <div id="signalDistribution" class="h-full bg-gradient-to-r from-blue-500 via-green-500 to-red-500" style="width: 0%"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- 公式说明卡片 -->
+                <div class="bg-white rounded-xl p-6 card-shadow">
+                    <h2 class="text-lg font-semibold mb-4 flex items-center">
+                        <i class="fa fa-formula text-primary mr-2"></i>公式说明
+                    </h2>
+                    <div class="space-y-3 text-sm">
+                        <div>
+                            <h3 class="font-medium mb-1">坐标系转换</h3>
+                            <p class="text-gray-600">
+                                球坐标系 (r,θ,φ) → 笛卡尔坐标系 (x,y,z)
+                            </p>
+                            <div class="grid grid-cols-1 md:grid-cols-3 gap-2 mt-1">
+                                <div class="bg-gray-50 p-2 rounded text-center">
+                                    x = r·sin(θ)·cos(φ)
+                                </div>
+                                <div class="bg-gray-50 p-2 rounded text-center">
+                                    y = r·sin(θ)·sin(φ)
+                                </div>
+                                <div class="bg-gray-50 p-2 rounded text-center">
+                                    z = r·cos(θ)
+                                </div>
+                            </div>
+                        </div>
+                        <div>
+                            <h3 class="font-medium mb-1">球面积分</h3>
+                            <p class="text-gray-600">
+                                信号总功率计算:
+                            </p>
+                            <div class="bg-gray-50 p-2 rounded mt-1">
+                                P = ∫∫|f(θ,φ)|²·sin(θ)dθdφ
+                            </div>
+                        </div>
+                        <div>
+                            <h3 class="font-medium mb-1">信号模式函数</h3>
+                            <div class="space-y-1 mt-1">
+                                <div class="bg-gray-50 p-2 rounded">
+                                    球面: f(θ,φ) = 1
+                                </div>
+                                <div class="bg-gray-50 p-2 rounded">
+                                    偶极子: f(θ,φ) = sin(θ)
+                                </div>
+                                <div class="bg-gray-50 p-2 rounded">
+                                    四极子: f(θ,φ) = sin²(θ)·cos(2φ)
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 右侧图表区域 -->
+            <div class="lg:col-span-2 space-y-6">
+                <!-- 3D信号强度图 -->
+                <div class="bg-white rounded-xl p-6 card-shadow">
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-lg font-semibold flex items-center">
+                            <i class="fa fa-globe text-primary mr-2"></i>3D信号强度分布
+                        </h2>
+                        <div class="flex space-x-2">
+                            <button class="view-btn px-2 py-1 text-xs bg-gray-200 text-gray-700 rounded hover:bg-gray-300 transition-all" data-view="xy">
+                                XY平面
+                            </button>
+                            <button class="view-btn px-2 py-1 text-xs bg-gray-200 text-gray-700 rounded hover:bg-gray-300 transition-all" data-view="xz">
+                                XZ平面
+                            </button>
+                            <button class="view-btn px-2 py-1 text-xs bg-gray-200 text-gray-700 rounded hover:bg-gray-300 transition-all" data-view="yz">
+                                YZ平面
+                            </button>
+                            <button class="view-btn px-2 py-1 text-xs bg-primary text-white rounded hover:bg-primary/90 transition-all" data-view="3d">
+                                3D视图
+                            </button>
+                        </div>
+                    </div>
+                    <div class="h-[400px] relative">
+                        <div id="loadingIndicator" class="absolute inset-0 flex items-center justify-center bg-white/80 z-10">
+                            <div class="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
+                        </div>
+                        <div id="signalPlot" class="h-full"></div>
+                    </div>
+                </div>
+                
+                <!-- 2D信号强度图 -->
+                <div class="bg-white rounded-xl p-6 card-shadow">
+                    <h2 class="text-lg font-semibold mb-4 flex items-center">
+                        <i class="fa fa-area-chart text-primary mr-2"></i>2D信号强度分布图
+                    </h2>
+                    <div class="h-[300px]">
+                        <div id="polarPlot"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- 页脚 -->
+    <footer class="bg-dark text-white py-6 mt-8">
+        <div class="container mx-auto px-4">
+            <div class="flex flex-col md:flex-row justify-between items-center">
+                <div class="mb-4 md:mb-0">
+                    <div class="flex items-center">
+                        <i class="fa fa-line-chart text-primary text-2xl mr-2"></i>
+                        <span class="text-xl font-bold">信号强度可视化</span>
+                    </div>
+                    <p class="text-gray-400 text-sm mt-1">基于球坐标系的信号强度动态展示工具</p>
+                </div>
+                <div class="flex space-x-4">
+                    <a href="#" class="text-gray-400 hover:text-white transition-colors">
+                        <i class="fa fa-github text-xl"></i>
+                    </a>
+                    <a href="#" class="text-gray-400 hover:text-white transition-colors">
+                        <i class="fa fa-twitter text-xl"></i>
+                    </a>
+                    <a href="#" class="text-gray-400 hover:text-white transition-colors">
+                        <i class="fa fa-linkedin text-xl"></i>
+                    </a>
+                </div>
+            </div>
+            <div class="border-t border-gray-700 mt-6 pt-6 text-center text-gray-400 text-sm">
+                &copy; 2025 信号强度可视化工具 | 使用 Plotly.js 构建
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        // 全局变量
+        let animationFrameId;
+        let currentTime = 0;
+        let isPlaying = false;
+        let animationSpeed = 5;
+        let signalMode = 'spherical';
+        let customFunction = 'sin(theta)*cos(phi)';
+        
+        // 信号强度计算函数
+        function calculateSignalStrength(theta, phi, time) {
+            // 角度单位转换：弧度转角度
+            theta = theta * Math.PI / 180;
+            phi = phi * Math.PI / 180;
+            
+            let r;
+            switch(signalMode) {
+                case 'spherical':
+                    r = 1;
+                    break;
+                case 'dipole':
+                    r = Math.sin(theta);
+                    break;
+                case 'quadrupole':
+                    r = Math.sin(theta) ** 2 * Math.cos(2 * phi);
+                    break;
+                case 'custom':
+                    try {
+                        // 安全地计算自定义函数
+                        const context = {
+                            Math,
+                            sin: Math.sin,
+                            cos: Math.cos,
+                            tan: Math.tan,
+                            theta,
+                            phi,
+                            time
+                        };
+                        r = Function(...Object.keys(context), `return ${customFunction};`)(...Object.values(context));
+                    } catch (e) {
+                        console.error('自定义函数计算错误:', e);
+                        r = 1;
+                    }
+                    break;
+                default:
+                    r = 1;
+            }
+            
+            // 添加时间变化，创建动画效果
+            r *= 0.5 + 0.5 * Math.sin(time);
+            
+            // 将r值转换为dBm单位 (-100 到 -20 dBm)
+            const minDbm = -100;
+            const maxDbm = -20;
+            const normalizedR = Math.max(0, Math.min(1, Math.abs(r)));
+            const dbm = minDbm + (1 - normalizedR) * (maxDbm - minDbm);
+            
+            return { r, dbm };
+        }
+        
+        // 球坐标系转笛卡尔坐标系
+        function sphericalToCartesian(r, theta, phi) {
+            // 角度单位转换：弧度转角度
+            theta = theta * Math.PI / 180;
+            phi = phi * Math.PI / 180;
+            
+            const x = r * Math.sin(theta) * Math.cos(phi);
+            const y = r * Math.sin(theta) * Math.sin(phi);
+            const z = r * Math.cos(theta);
+            
+            return { x, y, z };
+        }
+        
+        // 生成信号数据
+        function generateSignalData(time) {
+            const data = {
+                x: [],
+                y: [],
+                z: [],
+                dbm: [],
+                size: [],
+                color: []
+            };
+            
+            // 生成球面网格点
+            const thetaSteps = 36;
+            const phiSteps = 72;
+            
+            for (let i = 0; i <= thetaSteps; i++) {
+                const theta = 180 * i / thetaSteps;  // 0 到 180 度
+                
+                for (let j = 0; j <= phiSteps; j++) {
+                    const phi = 360 * j / phiSteps;  // 0 到 360 度
+                    
+                    // 计算信号强度
+                    const { r, dbm } = calculateSignalStrength(theta, phi, time);
+                    
+                    // 转换为笛卡尔坐标
+                    const { x, y, z } = sphericalToCartesian(r, theta, phi);
+                    
+                    // 添加到数据数组
+                    data.x.push(x);
+                    data.y.push(y);
+                    data.z.push(z);
+                    data.dbm.push(dbm);
+                    
+                    // 点的大小和颜色
+                    const normalizedDbm = (dbm + 100) / 80;  // 将 -100 到 -20 归一化到 0 到 1
+                    data.size.push(5 + normalizedDbm * 10);  // 大小范围从 5 到 15
+                    
+                    // 颜色映射：蓝色(弱) -> 绿色(中) -> 红色(强)
+                    let color;
+                    if (normalizedDbm < 0.5) {
+                        // 从蓝色到绿色
+                        color = `rgb(${Math.floor(255 * (1 - normalizedDbm * 2))}, ${Math.floor(255 * normalizedDbm * 2)}, 0)`;
+                    } else {
+                        // 从绿色到红色
+                        color = `rgb(255, ${Math.floor(255 * (2 - normalizedDbm * 2))}, 0)`;
+                    }
+                    data.color.push(color);
+                }
+            }
+            
+            return data;
+        }
+        
+        // 更新信息面板
+        function updateInfoPanel(data) {
+            const maxDbm = Math.max(...data.dbm);
+            const minDbm = Math.min(...data.dbm);
+            
+            // 计算信号覆盖面积（dBm > -80 的点的比例）
+            const coveredPoints = data.dbm.filter(dbm => dbm > -80).length;
+            const coverageArea = (coveredPoints / data.dbm.length * 100).toFixed(1) + '%';
+            
+            document.getElementById('currentTime').textContent = currentTime.toFixed(2) + 's';
+            document.getElementById('maxSignal').textContent = maxDbm.toFixed(1) + ' dBm';
+            document.getElementById('minSignal').textContent = minDbm.toFixed(1) + ' dBm';
+            document.getElementById('coverageArea').textContent = coverageArea;
+            
+            // 更新信号强度分布条
+            const distributionBar = document.getElementById('signalDistribution');
+            const normalizedMax = (maxDbm + 100) / 80;
+            const normalizedMin = (minDbm + 100) / 80;
+            distributionBar.style.width = `${normalizedMax * 100}%`;
+            distributionBar.style.background = `linear-gradient(to right, blue, green ${normalizedMin * 100}%, red ${normalizedMax * 100}%)`;
+        }
+        
+        // 初始化3D信号图
+        function initSignalPlot() {
+            const data = generateSignalData(currentTime);
+            
+            const trace = {
+                type: 'scatter3d',
+                mode: 'markers',
+                x: data.x,
+                y: data.y,
+                z: data.z,
+                marker: {
+                    size: data.size,
+                    color: data.color,
+                    opacity: 0.8,
+                    line: {
+                        width: 0.5,
+                        color: 'rgba(0, 0, 0, 0.3)'
+                    }
+                },
+                hovertemplate: 
+                    '<b>X</b>: %{x:.2f}<br>' +
+                    '<b>Y<b>Y</b>: %{y:.2f}<br>' +
+                    '<b>Z</b>: %{z:.2f}<br>' +
+                    '<b>信号强度</b>: %{customdata:.2f} dBm<extra></extra>',
+                customdata: data.dbm
+            };
+            
+            const layout = {
+                title: {
+                    text: '3D信号强度分布',
+                    font: {
+                        family: 'Inter, sans-serif',
+                        size: 16,
+                        color: '#1D2129'
+                    }
+                },
+                scene: {
+                    xaxis: {
+                        title: 'X轴',
+                        range: [-1.5, 1.5],
+                        showgrid: document.getElementById('showGrid').checked,
+                        showticklabels: true,
+                        zeroline: true,
+                        backgroundcolor: 'rgba(240, 240, 240, 0.5)'
+                    },
+                    yaxis: {
+                        title: 'Y轴',
+                        range: [-1.5, 1.5],
+                        showgrid: document.getElementById('showGrid').checked,
+                        showticklabels: true,
+                        zeroline: true,
+                        backgroundcolor: 'rgba(240, 240, 240, 0.5)'
+                    },
+                    zaxis: {
+                        title: 'Z轴',
+                        range: [-1.5, 1.5],
+                        showgrid: document.getElementById('showGrid').checked,
+                        showticklabels: true,
+                        zeroline: true,
+                        backgroundcolor: 'rgba(240, 240, 240, 0.5)'
+                    },
+                    camera: {
+                        eye: { x: 1.5, y: 1.5, z: 1.5 }
+                    },
+                    aspectmode: 'cube'
+                },
+                margin: {
+                    l: 0,
+                    r: 0,
+                    b: 0,
+                    t: 40
+                },
+                showlegend: document.getElementById('showLegend').checked,
+                legend: {
+                    font: {
+                        family: 'Inter, sans-serif',
+                        size: 12
+                    }
+                }
+            };
+            
+            Plotly.newPlot('signalPlot', [trace], layout, {
+                responsive: true,
+                displayModeBar: true,
+                modeBarButtonsToRemove: ['toggleSpikelines', 'hoverClosest3d']
+            });
+            
+            // 隐藏加载指示器
+            document.getElementById('loadingIndicator').style.display = 'none';
+            
+            // 更新信息面板
+            updateInfoPanel(data);
+        }
+        
+        // 初始化极坐标图
+        function initPolarPlot() {
+            // 只显示theta=90度的平面（水平面）
+            const phiSteps = 72;
+            const theta = 90;
+            
+            const rValues = [];
+            const phiValues = [];
+            const dbmValues = [];
+            
+            for (let j = 0; j <= phiSteps; j++) {
+                const phi = 360 * j / phiSteps;
+                
+                // 计算信号强度
+                const { r, dbm } = calculateSignalStrength(theta, phi, currentTime);
+                
+                rValues.push(r);
+                phiValues.push(phi);
+                dbmValues.push(dbm);
+            }
+            
+            const trace = {
+                type: 'scatterpolar',
+                r: rValues,
+                theta: phiValues,
+                mode: 'lines',
+                line: {
+                    color: 'rgba(22, 93, 255, 0.8)',
+                    width: 3
+                },
+                fill: 'toself',
+                fillcolor: 'rgba(22, 93, 255, 0.3)',
+                hovertemplate: 
+                    '<b>φ</b>: %{theta:.2f}°<br>' +
+                    '<b>r</b>: %{r:.2f}<br>' +
+                    '<b>信号强度</b>: %{customdata:.2f} dBm<extra></extra>',
+                customdata: dbmValues
+            };
+            
+            const layout = {
+                title: {
+                    text: '水平面信号强度分布 (θ=90°)',
+                    font: {
+                        family: 'Inter, sans-serif',
+                        size: 16,
+                        color: '#1D2129'
+                    }
+                },
+                polar: {
+                    radialaxis: {
+                        visible: true,
+                        range: [0, 1.2],
+                        showticklabels: true,
+                        tickfont: {
+                            family: 'Inter, sans-serif',
+                            size: 10
+                        }
+                    },
+                    angularaxis: {
+                        direction: 'counterclockwise',
+                        rotation: 90,
+                        showticklabels: true,
+                        tickfont: {
+                            family: 'Inter, sans-serif',
+                            size: 10
+                        }
+                    }
+                },
+                margin: {
+                    l: 0,
+                    r: 0,
+                    b: 0,
+                    t: 40
+                },
+                showlegend: false
+            };
+            
+            Plotly.newPlot('polarPlot', [trace], layout, {
+                responsive: true,
+                displayModeBar: true,
+                modeBarButtonsToRemove: ['toggleSpikelines', 'hoverClosestCartesian', 'hoverCompareCartesian']
+            });
+        }
+        
+        // 更新图表
+        function updateCharts() {
+            const data = generateSignalData(currentTime);
+            
+            // 更新3D图
+            const update = {
+                x: [data.x],
+                y: [data.y],
+                z: [data.z],
+                'marker.size': [data.size],
+                'marker.color': [data.color],
+                customdata: [data.dbm]
+            };
+            
+            Plotly.update('signalPlot', update, {}, [0]);
+            
+            // 更新极坐标图
+            const phiSteps = 72;
+            const theta = 90;
+            
+            const rValues = [];
+            const phiValues = [];
+            const dbmValues = [];
+            
+            for (let j = 0; j <= phiSteps; j++) {
+                const phi = 360 * j / phiSteps;
+                
+                // 计算信号强度
+                const { r, dbm } = calculateSignalStrength(theta, phi, currentTime);
+                
+                rValues.push(r);
+                phiValues.push(phi);
+                dbmValues.push(dbm);
+            }
+            
+            const polarUpdate = {
+                r: [rValues],
+                theta: [phiValues],
+                customdata: [dbmValues]
+            };
+            
+            Plotly.update('polarPlot', polarUpdate, {}, [0]);
+            
+            // 更新信息面板
+            updateInfoPanel(data);
+            
+            // 继续动画循环
+            if (isPlaying) {
+                currentTime += 0.02 * (animationSpeed / 5);
+                animationFrameId = requestAnimationFrame(updateCharts);
+            }
+        }
+        
+        // 播放/暂停动画
+        function togglePlayPause() {
+            const playPauseBtn = document.getElementById('playPauseBtn');
+            const icon = playPauseBtn.querySelector('i');
+            const text = playPauseBtn.querySelector('span');
+            
+            if (isPlaying) {
+                // 暂停动画
+                cancelAnimationFrame(animationFrameId);
+                isPlaying = false;
+                icon.className = 'fa fa-play mr-2';
+                text.textContent = '播放';
+            } else {
+                // 开始动画
+                isPlaying = true;
+                icon.className = 'fa fa-pause mr-2';
+                text.textContent = '暂停';
+                animationFrameId = requestAnimationFrame(updateCharts);
+            }
+        }
+        
+        // 重置动画
+        function resetAnimation() {
+            // 停止当前动画
+            if (isPlaying) {
+                togglePlayPause();
+            }
+            
+            // 重置时间
+            currentTime = 0;
+            
+            // 更新图表
+            updateCharts();
+        }
+        
+        // 更改视图
+        function changeView(viewType) {
+            const viewButtons = document.querySelectorAll('.view-btn');
+            viewButtons.forEach(btn => {
+                if (btn.dataset.view === viewType) {
+                    btn.classList.remove('bg-gray-200', 'text-gray-700');
+                    btn.classList.add('bg-primary', 'text-white');
+                } else {
+                    btn.classList.remove('bg-primary', 'text-white');
+                    btn.classList.add('bg-gray-200', 'text-gray-700');
+                }
+            });
+            
+            let camera;
+            switch(viewType) {
+                case 'xy':
+                    camera = { eye: { x: 0, y: 0, z: 3 } };
+                    break;
+                case 'xz':
+                    camera = { eye: { x: 0, y: 3, z: 0 } };
+                    break;
+                case 'yz':
+                    camera = { eye: { x: 3, y: 0, z: 0 } };
+                    break;
+                case '3d':
+                default:
+                    camera = { eye: { x: 1.5, y: 1.5, z: 1.5 } };
+                    break;
+            }
+            
+            Plotly.relayout('signalPlot', {
+                'scene.camera': camera
+            });
+        }
+        
+        // 更改信号模式
+        function changeSignalMode(mode) {
+            signalMode = mode;
+            
+            // 更新按钮样式
+            const modeButtons = document.querySelectorAll('.signal-mode-btn');
+            modeButtons.forEach(btn => {
+                if (btn.dataset.mode === mode) {
+                    btn.classList.remove('bg-gray-200', 'text-gray-700');
+                    btn.classList.add('bg-primary', 'text-white');
+                } else {
+                    btn.classList.remove('bg-primary', 'text-white');
+                    btn.classList.add('bg-gray-200', 'text-gray-700');
+                }
+            });
+            
+            // 显示或隐藏自定义选项
+            const customOptions = document.getElementById('customModeOptions');
+            if (mode === 'custom') {
+                customOptions.classList.remove('hidden');
+            } else {
+                customOptions.classList.add('hidden');
+            }
+            
+            // 重置并更新图表
+            resetAnimation();
+        }
+        
+        // 页面加载完成后初始化
+        document.addEventListener('DOMContentLoaded', () => {
+            // 初始化图表
+            initSignalPlot();
+            initPolarPlot();
+            
+            // 绑定按钮事件
+            document.getElementById('playPauseBtn').addEventListener('click', togglePlayPause);
+            document.getElementById('resetBtn').addEventListener('click', resetAnimation);
+            
+            // 视图切换按钮
+            document.querySelectorAll('.view-btn').forEach(btn => {
+                btn.addEventListener('click', () => changeView(btn.dataset.view));
+            });
+            
+            // 信号模式按钮
+            document.querySelectorAll('.signal-mode-btn').forEach(btn => {
+                btn.addEventListener('click', () => changeSignalMode(btn.dataset.mode));
+            });
+            
+            // 自定义函数输入
+            document.getElementById('customFunction').addEventListener('change', () => {
+                customFunction = document.getElementById('customFunction').value;
+                resetAnimation();
+            });
+            
+            // 动画速度滑块
+            document.getElementById('speedSlider').addEventListener('input', (e) => {
+                animationSpeed = parseInt(e.target.value);
+            });
+            
+            // 显示选项
+            document.getElementById('showGrid').addEventListener('change', (e) => {
+                Plotly.relayout('signalPlot', {
+                    'scene.xaxis.showgrid': e.target.checked,
+                    'scene.yaxis.showgrid': e.target.checked,
+                    'scene.zaxis.showgrid': e.target.checked
+                });
+            });
+            
+            document.getElementById('showAxes').addEventListener('change', (e) => {
+                Plotly.relayout('signalPlot', {
+                    'scene.xaxis.visible': e.target.checked,
+                    'scene.yaxis.visible': e.target.checked,
+                    'scene.zaxis.visible': e.target.checked
+                });
+            });
+            
+            document.getElementById('showLegend').addEventListener('change', (e) => {
+                Plotly.relayout('signalPlot', {
+                    showlegend: e.target.checked
+                });
+            });
+            
+            // 添加导航栏滚动效果
+            window.addEventListener('scroll', () => {
+                const nav = document.querySelector('nav');
+                if (window.scrollY > 10) {
+                    nav.classList.add('shadow-md');
+                    nav.classList.remove('shadow-sm');
+                } else {
+                    nav.classList.remove('shadow-md');
+                    nav.classList.add('shadow-sm');
+                }
+            });
+        });
+    </script>
+</body>
+</html>
+    

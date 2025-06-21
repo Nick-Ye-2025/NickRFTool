@@ -1,0 +1,28 @@
+<Window x:Class="RFTestTool.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:lvc="clr-namespace:LiveCharts.Wpf;assembly=LiveCharts.Wpf"
+        Width="1200" Height="800">
+    
+    <Grid>
+        <!-- 仪器控制区 -->
+        <GroupBox Header="仪器配置" Margin="10">
+            <StackPanel>
+                <ComboBox x:Name="DeviceList" DisplayMemberPath="Alias"/>
+                <Button Content="自动检测" Click="AutoDetect_Click"/>
+                <TextBox x:Name="TcpAddress" Text="192.168.1.100"/>
+            </StackPanel>
+        </GroupBox>
+
+        <!-- 图表显示区 -->
+        <lvc:CartesianChart x:Name="ChartControl" Margin="200,10,10,40">
+            <lvc:CartesianChart.Series>
+                <lvc:LineSeries Values="{Binding WaveformData}"/>
+            </lvc:CartesianChart.Series>
+        </lvc:CartesianChart>
+
+        <!-- 控制按钮 -->
+        <Button x:Name="StartTest" Content="开始测试" 
+                Click="StartTest_Click" 
+                Margin="10" VerticalAlignment="Bottom"/>
+    </Grid>
+</Window>

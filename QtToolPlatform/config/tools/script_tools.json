@@ -1,0 +1,17 @@
+{
+    "category": "脚本工具",
+    "items": [
+        {
+            "name": "数据清理", 
+            "command": "python d:\\Nick\\BeyondC\\一键开天门.py",
+            "type": "script",
+            "platform": ["win", "mac"]
+        },
+        {
+            "name": "Auto Backup",
+            "command": "backup_util.exe",
+            "type": "executable",
+            "platform": ["win"]
+        }
+    ]
+}

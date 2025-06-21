@@ -1,0 +1,561 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ant-A区域2000MHz真实辐射热力图</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.8/dist/chart.umd.min.js"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        'signal-0': '#0A2463',     // 0dBm - 深蓝
+                        'signal-10': '#1E40AF',    // 10dBm - 蓝色
+                        'signal-20': '#3B82F6',    // 20dBm - 亮蓝
+                        'signal-24': '#F59E0B',    // 24dBm - 橙色
+                        'signal-26': '#EF4444',    // 26dBm - 深红
+                        'antenna-a': '#EF4444',    // Ant-A颜色
+                        'phone-body': '#1E293B',   // 手机主体颜色
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'system-ui', 'sans-serif'],
+                    },
+                }
+            }
+        }
+    </script>
+    <style type="text/tailwindcss">
+        @layer utilities {
+            .antenna-glow {
+                box-shadow: 0 0 12px 3px rgba(239, 68, 68, 0.7);
+            }
+            .heatmap-shadow {
+                filter: drop-shadow(0 0 15px rgba(245, 158, 11, 0.4));
+            }
+            .phone-mask {
+                mask-image: linear-gradient(to bottom, black 80%, transparent 100%);
+                -webkit-mask-image: linear-gradient(to bottom, black 80%, transparent 100%);
+            }
+        }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-gray-900 to-gray-800 text-light min-h-screen">
+    <div class="container mx-auto px-4 py-8">
+        <!-- 标题区域 -->
+        <header class="mb-10 text-center">
+            <h1 class="text-[clamp(1.8rem,4vw,2.8rem)] font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-red-400 mb-3">
+                Ant-A区域2000MHz真实辐射热力图
+            </h1>
+            <p class="text-gray-300 max-w-2xl mx-auto text-[clamp(1rem,2vw,1.2rem)]">
+                左下角Ant-A天线近距离辐射分布，模拟真实手机外壳与材质影响
+            </p>
+        </header>
+
+        <!-- 主内容区域 -->
+        <main class="grid md:grid-cols-2 gap-8">
+            <!-- 热力图1：手机BG面(正面) - Ant-A区域 -->
+            <div class="bg-gray-800/50 rounded-xl p-6 shadow-lg transform hover:scale-[1.03] transition-all duration-300">
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="text-xl font-semibold text-white flex items-center">
+                        <i class="fa fa-mobile-phone text-blue-400 text-2xl"></i>
+                        BG面(正面) - Ant-A辐射热力图
+                    </h2>
+                    <div class="bg-gray-700/70 px-3 py-1 rounded-full text-sm flex items-center">
+                        <span class="text-blue-400 mr-1">2000MHz</span>
+                        <i class="fa fa-signal text-blue-400"></i>
+                    </div>
+                </div>
+                <div class="aspect-square relative">
+                    <canvas id="bgHeatmap" class="w-full h-full rounded-lg heatmap-shadow"></canvas>
+                    <!-- 手机图标与天线标记 (半透明遮挡模拟手机外壳) -->
+                    <div class="absolute inset-0 flex items-center justify-center pointer-events-none">
+                        <div class="w-[20%] h-[50%] bg-phone-body/80 rounded-lg border-2 border-gray-600 phone-mask"></div>
+                        <!-- Ant-A(左下)天线标记 -->
+                        <div class="absolute bottom-[18%] left-[18%] w-[6%] h-[6%] bg-antenna-a/90 rounded-full border-2 border-antenna-a antenna-glow"></div>
+                        <!-- 摄像头模组 -->
+                        <div class="absolute top-[20%] right-[20%] w-[10%] h-[12%] bg-gray-400/40 rounded-lg border border-gray-300/60"></div>
+                    </div>
+                </div>
+                <div class="mt-4 flex justify-between items-center">
+                    <div class="text-sm text-gray-400">
+                        <i class="fa fa-map-o mr-1"></i> Ant-A区域(左下)
+                    </div>
+                    <div class="flex items-center space-x-2">
+                        <div class="w-3 h-3 rounded-full bg-signal-0 mr-1"></div>
+                        <span class="text-xs text-gray-300">弱</span>
+                        <div class="w-3 h-3 rounded-full bg-signal-26 mr-1"></div>
+                        <span class="text-xs text-gray-300">强</span>
+                    </div>
+                </div>
+                <div class="mt-3 grid grid-cols-2 gap-2 text-sm text-gray-400">
+                    <p class="flex items-center"><i class="fa fa-arrow-down text-red-500 mr-2"></i> Ant-A: <span class="text-white">26.0 dBm</span></p>
+                    <p class="flex items-center"><i class="fa fa-arrow-up text-red-500 mr-2"></i> 摄像头附近: <span class="text-white">18.5 dBm</span></p>
+                    <p class="flex items-center"><i class="fa fa-ruler-combined text-red-500 mr-2"></i> 热区半径: <span class="text-white">~15mm</span></p>
+                    <p class="flex items-center"><i class="fa fa-bolt text-red-500 mr-2"></i> 衰减率: <span class="text-white">8dB/10mm</span></p>
+                </div>
+            </div>
+
+            <!-- 热力图2：手机CG面(背面) - Ant-A区域 -->
+            <div class="bg-gray-800/50 rounded-xl p-6 shadow-lg transform hover:scale-[1.03] transition-all duration-300">
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="text-xl font-semibold text-white flex items-center">
+                        <i class="fa fa-mobile-phone text-red-400 text-2xl"></i>
+                        CG面(背面) - Ant-A辐射热力图
+                    </h2>
+                    <div class="bg-gray-700/70 px-3 py-1 rounded-full text-sm flex items-center">
+                        <span class="text-red-400 mr-1">2000MHz</span>
+                        <i class="fa fa-signal text-red-400"></i>
+                    </div>
+                </div>
+                <div class="aspect-square relative">
+                    <canvas id="cgHeatmap" class="w-full h-full rounded-lg heatmap-shadow"></canvas>
+                    <!-- 手机图标与天线标记 (半透明遮挡模拟手机外壳) -->
+                    <div class="absolute inset-0 flex items-center justify-center pointer-events-none">
+                        <div class="w-[20%] h-[50%] bg-phone-body/80 rounded-lg border-2 border-gray-600 phone-mask"></div>
+                        <!-- Ant-A(左下)天线标记 -->
+                        <div class="absolute bottom-[18%] left-[18%] w-[6%] h-[6%] bg-antenna-a/90 rounded-full border-2 border-antenna-a antenna-glow"></div>
+                        <!-- 摄像头模组 -->
+                        <div class="absolute top-[20%] right-[20%] w-[10%] h-[12%] bg-gray-400/40 rounded-lg border border-gray-300/60"></div>
+                    </div>
+                </div>
+                <div class="mt-4 flex justify-between items-center">
+                    <div class="text-sm text-gray-400">
+                        <i class="fa fa-map-o mr-1"></i> Ant-A区域(左下)
+                    </div>
+                    <div class="flex items-center space-x-2">
+                        <div class="w-3 h-3 rounded-full bg-signal-0 mr-1"></div>
+                        <span class="text-xs text-gray-300">弱</span>
+                        <div class="w-3 h-3 rounded-full bg-signal-26 mr-1"></div>
+                        <span class="text-xs text-gray-300">强</span>
+                    </div>
+                </div>
+                <div class="mt-3 grid grid-cols-2 gap-2 text-sm text-gray-400">
+                    <p class="flex items-center"><i class="fa fa-arrow-down text-red-500 mr-2"></i> Ant-A: <span class="text-white">24.8 dBm</span></p>
+                    <p class="flex items-center"><i class="fa fa-arrow-up text-red-500 mr-2"></i> 摄像头附近: <span class="text-white">17.2 dBm</span></p>
+                    <p class="flex items-center"><i class="fa fa-ruler-combined text-red-500 mr-2"></i> 热区半径: <span class="text-white">~12mm</span></p>
+                    <p class="flex items-center"><i class="fa fa-bolt text-red-500 mr-2"></i> 背板衰减: <span class="text-white">1.2dB</span></p>
+                </div>
+            </div>
+        </main>
+
+        <!-- 天线位置与信号说明 -->
+        <div class="mt-6 bg-gray-800/30 rounded-xl p-4 shadow-lg">
+            <h3 class="text-lg font-semibold text-white mb-3 flex items-center">
+                <i class="fa fa-info-circle mr-2 text-purple-400"></i>
+                真实环境辐射特性说明
+            </h3>
+            <div class="grid md:grid-cols-2 gap-6">
+                <div class="bg-gray-700/20 rounded-lg p-4">
+                    <h4 class="text-white font-medium mb-3 flex items-center">
+                        <i class="fa fa-radar mr-2 text-blue-400"></i>
+                        近距离辐射特性
+                    </h4>
+                    <ul class="text-gray-300 space-y-2 text-sm">
+                        <li class="flex items-start">
+                            <i class="fa fa-dot-circle-o text-green-400 mt-1 mr-2"></i>
+                            <span>Ant-A热区集中在天线周围15mm范围内，符合真实辐射衰减</span>
+                        </li>
+                        <li class="flex items-start">
+                            <i class="fa fa-dot-circle-o text-green-400 mt-1 mr-2"></i>
+                            <span>手机外壳导致信号衰减约2-3dB，热区范围缩小约3mm</span>
+                        </li>
+                        <li class="flex items-start">
+                            <i class="fa fa-dot-circle-o text-green-400 mt-1 mr-2"></i>
+                            <span>摄像头金属模组导致信号衰减4-5dB，形成明显阴影区</span>
+                        </li>
+                        <li class="flex items-start">
+                            <i class="fa fa-dot-circle-o text-green-400 mt-1 mr-2"></i>
+                            <span>背面热区因背板材质衰减，比正面小约3mm</span>
+                        </li>
+                    </ul>
+                </div>
+                <div class="bg-gray-700/20 rounded-lg p-4">
+                    <h4 class="text-white font-medium mb-3 flex items-center">
+                        <i class="fa fa-mobile-phone mr-2 text-yellow-400"></i>
+                        手机与天线比例
+                    </h4>
+                    <div class="relative w-full h-40 bg-gray-700/50 rounded-lg">
+                        <div class="absolute inset-0 flex items-center justify-center">
+                            <div class="w-16 h-32 bg-phone-body/80 rounded-lg border-2 border-gray-600 phone-mask"></div>
+                            <!-- Ant-A天线标记 -->
+                            <div class="absolute bottom-[18%] left-[18%] w-3 h-3 bg-antenna-a rounded-full border-2 border-antenna-a antenna-glow"></div>
+                            <!-- 热区范围示意 -->
+                            <div class="absolute bottom-[18%] left-[18%] w-10 h-10 border-1 border-yellow-400/50 rounded-full"></div>
+                            <div class="absolute bottom-[18%] left-[18%] w-8 h-8 border-1 border-yellow-400/70 rounded-full"></div>
+                            <div class="absolute bottom-[18%] left-[18%] w-6 h-6 border-1 border-yellow-400 rounded-full"></div>
+                            <!-- 标记说明 -->
+                            <div class="absolute bottom-[28%] left-[15%] text-xs text-yellow-400">热区范围</div>
+                            <!-- 摄像头模组 -->
+                            <div class="absolute top-[20%] right-[20%] w-5 h-6 bg-gray-400/40 rounded-lg border border-gray-300/60"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 分析建议区域 -->
+        <div class="mt-10 bg-gray-800/30 rounded-xl p-6 shadow-lg">
+            <h2 class="text-xl font-semibold text-white mb-4 flex items-center">
+                <i class="fa fa-lightbulb-o mr-2 text-yellow-400"></i>
+                近距离辐射优化方案
+            </h2>
+            <div class="grid md:grid-cols-2 gap-6">
+                <div class="bg-gray-700/20 rounded-lg p-4">
+                    <h3 class="text-white font-medium mb-3 flex items-center">
+                        <i class="fa fa-exclamation-triangle mr-2 text-red-400"></i>
+                        辐射安全风险
+                    </h3>
+                    <ul class="text-gray-300 space-y-2 text-sm">
+                        <li class="flex items-start">
+                            <i class="fa fa-circle text-red-400 mt-1 mr-2 text-xs"></i>
+                            <span>Ant-A附近20mm内辐射强度>20dBm，需考虑人体接触限制</span>
+                        </li>
+                        <li class="flex items-start">
+                            <i class="fa fa-circle text-red-400 mt-1 mr-2 text-xs"></i>
+                            <span>长时间握持Ant-A区域可能导致局部辐射超标</span>
+                        </li>
+                        <li class="flex items-start">
+                            <i class="fa fa-circle text-red-400 mt-1 mr-2 text-xs"></i>
+                            <span>摄像头阴影区可能导致数据传输不稳定</span>
+                        </li>
+                        <li class="flex items-start">
+                            <i class="fa fa-circle text-red-400 mt-1 mr-2 text-xs"></i>
+                            <span>背面热区靠近手掌位置，需优化握持时的信号衰减</span>
+                        </li>
+                    </ul>
+                </div>
+                <div class="bg-gray-700/20 rounded-lg p-4">
+                    <h3 class="text-white font-medium mb-3 flex items-center">
+                        <i class="fa fa-wrench mr-2 text-blue-400"></i>
+                        工程优化方案
+                    </h3>
+                    <ol class="text-gray-300 space-y-2 text-sm list-decimal pl-5">
+                        <li>
+                            <span class="font-medium text-blue-300">Ant-A区域屏蔽：</span>
+                            使用0.5mm厚的透波屏蔽材料，降低表面辐射1.5-2dB
+                        </li>
+                        <li>
+                            <span class="font-medium text-blue-300">摄像头信号补偿：</span>
+                            在摄像头周围添加微型反射天线，补偿4dB信号衰减
+                        </li>
+                        <li>
+                            <span class="font-medium text-blue-300">背板材料优化：</span>
+                            Ant-A对应背面区域使用聚碳酸酯透波材料，减少衰减
+                        </li>
+                        <li>
+                            <span class="font-medium text-blue-300">天线方向调整：</span>
+                            调整Ant-A倾角15°，使热区远离人体握持位置
+                        </li>
+                        <li>
+                            <span class="font-medium text-blue-300">智能功率控制：</span>
+                            检测到握持时自动降低Ant-A功率1-2dB
+                        </li>
+                    </ol>
+                </div>
+            </div>
+        </div>
+
+        <!-- 页脚 -->
+        <footer class="mt-10 text-center text-gray-500 text-sm">
+            <p>© 2025 手机天线近场辐射分析系统 | 真实热区版本 1.1</p>
+        </footer>
+    </div>
+
+    <script>
+        // 生成Ant-A近距离辐射数据
+        function generateAntARadiationData(size = 100, isBack = false) {
+            const data = [];
+            const centerX = size / 2;
+            const centerY = size / 2;
+            
+            // Ant-A天线位置 (左下)
+            const antA = { x: size * 0.18, y: size * 0.82, power: 26.0 };
+            
+            // 手机外壳边界 (模拟手机尺寸)
+            const phoneLeft = size * 0.4;
+            const phoneRight = size * 0.6;
+            const phoneTop = size * 0.2;
+            const phoneBottom = size * 0.8;
+            
+            // 摄像头模组
+            const camera = { x: size * 0.8, y: size * 0.2, radius: size * 0.08 };
+            
+            for (let y = 0; y < size; y++) {
+                for (let x = 0; x < size; x++) {
+                    // 计算到Ant-A的距离
+                    const distance = Math.sqrt(Math.pow(x - antA.x, 2) + Math.pow(y - antA.y, 2));
+                    
+                    // 手机外壳衰减 (距离手机越近衰减越大)
+                    let phoneAttenuation = 1.0;
+                    if (x > phoneLeft && x < phoneRight && y > phoneTop && y < phoneBottom) {
+                        phoneAttenuation = 0.95; // 手机内部衰减5%
+                    } else if ((x < phoneLeft || x > phoneRight || y < phoneTop || y > phoneBottom) && 
+                              distance < size * 0.3) {
+                        phoneAttenuation = 0.98; // 手机附近衰减2%
+                    }
+                    
+                    // 信号强度 (近距离强衰减模型)
+                    let signal = antA.power / (1 + 0.015 * distance * distance);
+                    
+                    // 摄像头衰减
+                    const distToCamera = Math.sqrt(Math.pow(x - camera.x, 2) + Math.pow(y - camera.y, 2));
+                    if (distToCamera < camera.radius) {
+                        signal *= 0.85; // 摄像头区域衰减15%
+                    }
+                    
+                    // 背面衰减
+                    if (isBack) signal *= 0.96; // 背面衰减4%
+                    
+                    // 限制在0-26dBm
+                    signal = Math.max(0, Math.min(26, signal));
+                    
+                    data.push({x, y, value: signal});
+                }
+            }
+            
+            return data;
+        }
+
+        // 创建热力图
+        function createHeatmap(canvasId, isBack = false) {
+            const canvas = document.getElementById(canvasId);
+            const ctx = canvas.getContext('2d');
+            
+            // 高DPI支持
+            const dpr = window.devicePixelRatio || 1;
+            const rect = canvas.getBoundingClientRect();
+            canvas.width = rect.width * dpr;
+            canvas.height = rect.height * dpr;
+            ctx.scale(dpr, dpr);
+            
+            // 重置样式
+            canvas.style.width = `${rect.width}px`;
+            canvas.style.height = `${rect.height}px`;
+            
+            // 生成辐射数据
+            const data = generateAntARadiationData(100, isBack);
+            
+            // 绘制热力图
+            const cellSize = rect.width / 100;
+            data.forEach(point => {
+                ctx.fillStyle = getColorForSignal(point.value);
+                ctx.fillRect(point.x * cellSize, point.y * cellSize, cellSize, cellSize);
+            });
+            
+            // 绘制20dBm等高线
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
+            ctx.lineWidth = 1.8;
+            
+            for (let y = 0; y < 99; y++) {
+                for (let x = 0; x < 99; x++) {
+                    const idx = y * 100 + x;
+                    const values = [
+                        data[idx].value,
+                        data[idx + 1].value,
+                        data[idx + 100].value,
+                        data[idx + 101].value
+                    ];
+                    
+                    drawContourLine(ctx, x, y, values, cellSize, 20);
+                }
+            }
+            
+            // 绘制手机轮廓 (半透明遮挡)
+            drawPhoneOutline(ctx, rect);
+            
+            // 添加方向标记
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+            ctx.font = '12px Arial';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('上', rect.width / 2, 15);
+            ctx.fillText('下', rect.width / 2, rect.height - 15);
+            ctx.fillText('左', 15, rect.height / 2);
+            ctx.fillText('右', rect.width - 15, rect.height / 2);
+            
+            // 添加图例
+            drawLegend(ctx, rect);
+        }
+
+        // 绘制等高线
+        function drawContourLine(ctx, x, y, values, cellSize, threshold) {
+            const x1 = x * cellSize;
+            const y1 = y * cellSize;
+            const x2 = (x + 1) * cellSize;
+            const y2 = (y + 1) * cellSize;
+            
+            const p1 = values[0] >= threshold;
+            const p2 = values[1] >= threshold;
+            const p3 = values[3] >= threshold;
+            const p4 = values[2] >= threshold;
+            
+            const index = (p1 ? 1 : 0) + (p2 ? 2 : 0) + (p3 ? 4 : 0) + (p4 ? 8 : 0);
+            const edgeTable = [
+                [],
+                [1, 3],
+                [0, 2],
+                [0, 3, 2],
+                [1, 2],
+                [0, 1, 3],
+                [0, 3],
+                [0, 2, 1],
+                [3, 1],
+                [2, 0, 3],
+                [3, 2],
+                [1, 3],
+                [2, 0],
+                [1, 0, 2],
+                [2, 1],
+                [0, 1]
+            ];
+            
+            if (edgeTable[index].length === 0) return;
+            
+            ctx.beginPath();
+            
+            const getIntersection = (a, b, valA, valB) => {
+                const t = (threshold - valA) / (valB - valA);
+                return a + t * (b - a);
+            };
+            
+            for (let i = 0; i < edgeTable[index].length; i += 2) {
+                const edge = edgeTable[index][i];
+                let xA, yA, xB, yB, valA, valB;
+                
+                switch (edge) {
+                    case 0: xA = x1; yA = y1; xB = x1; yB = y2; valA = values[0]; valB = values[2]; break;
+                    case 1: xA = x2; yA = y1; xB = x2; yB = y2; valA = values[1]; valB = values[3]; break;
+                    case 2: xA = x1; yA = y1; xB = x2; yB = y1; valA = values[0]; valB = values[1]; break;
+                    case 3: xA = x1; yA = y2; xB = x2; yB = y2; valA = values[2]; valB = values[3]; break;
+                }
+                
+                const x = getIntersection(xA, xB, valA, valB);
+                const y = getIntersection(yA, yB, valA, valB);
+                
+                if (i === 0) {
+                    ctx.moveTo(x, y);
+                } else {
+                    ctx.lineTo(x, y);
+                }
+            }
+            
+            ctx.stroke();
+        }
+
+        // 绘制手机轮廓
+        function drawPhoneOutline(ctx, rect) {
+            const phoneWidth = rect.width * 0.2;
+            const phoneHeight = rect.height * 0.5;
+            const phoneLeft = (rect.width - phoneWidth) / 2;
+            const phoneTop = (rect.height - phoneHeight) / 2;
+            
+            // 手机主体
+            ctx.fillStyle = 'rgba(30, 41, 59, 0.7)';
+            ctx.fillRoundRect(phoneLeft, phoneTop, phoneWidth, phoneHeight, 8);
+            
+            // Ant-A天线标记
+            const antASize = rect.width * 0.06;
+            const antALeft = phoneLeft + phoneWidth * 0.35;
+            const antATop = phoneTop + phoneHeight * 0.8;
+            ctx.fillStyle = '#EF4444';
+            ctx.beginPath();
+            ctx.arc(antALeft, antATop, antASize, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.strokeStyle = 'white';
+            ctx.lineWidth = 1.5;
+            ctx.stroke();
+            
+            // 摄像头模组
+            const cameraWidth = rect.width * 0.1;
+            const cameraHeight = rect.height * 0.12;
+            const cameraLeft = phoneLeft + phoneWidth * 0.8;
+            const cameraTop = phoneTop + phoneHeight * 0.2;
+            ctx.fillStyle = 'rgba(60, 60, 60, 0.5)';
+            ctx.fillRoundRect(cameraLeft, cameraTop, cameraWidth, cameraHeight, 4);
+        }
+
+        // 绘制图例
+        function drawLegend(ctx, rect) {
+            const legendWidth = 220;
+            const legendHeight = 25;
+            const legendX = (rect.width - legendWidth) / 2;
+            const legendY = rect.height - 60;
+            
+            // 绘制渐变色条
+            for (let i = 0; i < legendWidth; i++) {
+                const value = (i / legendWidth) * 26;
+                ctx.fillStyle = getColorForSignal(value);
+                ctx.fillRect(legendX + i, legendY, 1, legendHeight);
+            }
+            
+            // 刻度线
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.6)';
+            ctx.lineWidth = 1;
+            const steps = 6;
+            for (let i = 0; i <= steps; i++) {
+                const x = legendX + (legendWidth / (steps-1)) * i;
+                const value = Math.round(i * 26 / (steps-1));
+                
+                ctx.beginPath();
+                ctx.moveTo(x, legendY);
+                ctx.lineTo(x, legendY - 5);
+                ctx.stroke();
+                
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+                ctx.font = '10px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText(`${value}dBm`, x, legendY - 10);
+            }
+            
+            // 20dBm标记
+            const twentyDbmX = legendX + (20 / 26) * legendWidth;
+            ctx.beginPath();
+            ctx.moveTo(twentyDbmX, legendY);
+            ctx.lineTo(twentyDbmX, legendY + legendHeight);
+            ctx.strokeStyle = 'white';
+            ctx.lineWidth = 1.5;
+            ctx.stroke();
+            ctx.fillText('20dBm', twentyDbmX - 12, legendY + legendHeight + 18);
+        }
+
+        // 辅助函数：绘制圆角矩形
+        ctx.fillRoundRect = function(x, y, w, h, r) {
+            this.beginPath();
+            this.moveTo(x + r, y);
+            this.lineTo(x + w - r, y);
+            this.arcTo(x + w, y, x + w, y + r, r);
+            this.lineTo(x + w, y + h - r);
+            this.arcTo(x + w, y + h, x + w - r, y + h, r);
+            this.lineTo(x + r, y + h);
+            this.arcTo(x, y + h, x, y + h - r, r);
+            this.lineTo(x, y + r);
+            this.arcTo(x, y, x + r, y, r);
+            this.fill();
+        };
+
+        // 根据信号强度获取颜色
+        function getColorForSignal(signal) {
+            if (signal < 10) return '#0A2463';     // 0-10dBm - 深蓝
+            if (signal < 20) return '#1E40AF';    // 10-20dBm - 蓝色
+            if (signal < 24) return '#3B82F6';    // 20-24dBm - 亮蓝
+            if (signal < 26) return '#F59E0B';    // 24-26dBm - 橙色
+            return '#EF4444';                    // 26dBm+ - 深红
+        }
+
+        // 页面加载后绘制热力图
+        window.addEventListener('DOMContentLoaded', () => {
+            createHeatmap('bgHeatmap', false);  // 正面热力图
+            createHeatmap('cgHeatmap', true);   // 背面热力图
+            
+            // 响应式调整
+            window.addEventListener('resize', () => {
+                createHeatmap('bgHeatmap', false);
+                createHeatmap('cgHeatmap', true);
+            });
+        });
+    </script>
+</body>
+</html>

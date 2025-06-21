@@ -1,0 +1,597 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>半圆区域TRP可视化工具 (HTML Canvas)</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body {
+            font-family: "Microsoft YaHei", Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f7fa;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        h1, h2, h3 {
+            color: #2c3e50;
+            text-align: center;
+        }
+        .card {
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+        }
+        .control-panel {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 15px;
+            margin: 20px 0;
+        }
+        button, select {
+            padding: 8px 15px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            cursor: pointer;
+            background-color: white;
+        }
+        button:hover, select:hover {
+            background-color: #f0f5ff;
+        }
+        .active {
+            background-color: #e1f0ff;
+            border-color: #3498db;
+        }
+        .legend {
+            display: flex;
+            align-items: center;
+            margin: 10px 0;
+            font-size: 14px;
+        }
+        .legend-color {
+            width: 15px;
+            height: 15px;
+            margin-right: 5px;
+            border-radius: 3px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>半圆区域TRP可视化工具</h1>
+        <p>展示手机正前方半球的辐射能量分布和TRP积分计算</p>
+        
+        <div class="card">
+            <h2>坐标系定义</h2>
+            <div style="display: flex; justify-content: center; margin: 20px 0;">
+                <canvas id="coordinateCanvas" width="400" height="400"></canvas>
+            </div>
+            <p>X轴：垂直手机正面（屏幕外侧）</p>
+            <p>Y轴：平行手机正面（右侧方向）</p>
+            <p>Z轴：平行手机正面（顶部方向）</p>
+        </div>
+        
+        <div class="control-panel">
+            <button id="antennaA" class="active">天线A（左上角）</button>
+            <button id="antennaB">天线B（右上角）</button>
+            <button id="antennaC">天线C（右下角）</button>
+            <button id="antennaD">天线D（左下角）</button>
+            <select id="sampleDensity">
+                <option value="30">采样密度: 30x30</option>
+                <option value="50" selected>采样密度: 50x50</option>
+                <option value="70">采样密度: 70x70</option>
+                <option value="100">采样密度: 100x100</option>
+            </select>
+            <button id="updateBtn">更新可视化</button>
+        </div>
+        
+        <div class="grid">
+            <div class="card">
+                <h3>全球面辐射热力图</h3>
+                <div class="legend">
+                    <div class="legend-color" style="background: linear-gradient(to right, #3B82F6, #10B981, #EF4444);"></div>
+                    <span>信号强度: -40dBm 至 0dBm</span>
+                </div>
+                <canvas id="fullSphereHeatmap" width="400" height="400"></canvas>
+            </div>
+            
+            <div class="card">
+                <h3>正面半球辐射热力图</h3>
+                <div class="legend">
+                    <div class="legend-color" style="background: linear-gradient(to right, #3B82F6, #10B981, #EF4444);"></div>
+                    <span>信号强度: -40dBm 至 0dBm</span>
+                </div>
+                <canvas id="halfSphereHeatmap" width="400" height="400"></canvas>
+            </div>
+        </div>
+        
+        <div class="card">
+            <h3>3D球面辐射分布</h3>
+            <canvas id="threeDSpherePlot" width="800" height="400"></canvas>
+        </div>
+        
+        <div class="card" style="text-align: center;">
+            <h3>TRP值计算</h3>
+            <div style="display: flex; justify-content: center; gap: 40px; margin: 20px 0;">
+                <div>
+                    <p>总TRP值:</p>
+                    <p id="totalTRP" style="font-size: 24px; color: #3498db;">-- dBm</p>
+                </div>
+                <div>
+                    <p>半圆TRP值:</p>
+                    <p id="halfSphereTRP" style="font-size: 24px; color: #e74c3c;">-- dBm</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 全局变量
+        let samples = [];
+        let activeAntenna = 'A';
+        let density = 50;
+        
+        // 天线位置参数
+        const antennaPositions = {
+            A: { x: -0.3, y: 0.3, z: 0 },  // 左上角
+            B: { x: 0.3, y: 0.3, z: 0 },   // 右上角
+            C: { x: 0.3, y: -0.3, z: 0 },  // 右下角
+            D: { x: -0.3, y: -0.3, z: 0 }  // 左下角
+        };
+        
+        // DOM加载完成后执行
+        document.addEventListener('DOMContentLoaded', function() {
+            // 初始化图表
+            initCharts();
+            
+            // 生成初始数据
+            generateData(activeAntenna, density);
+            
+            // 绑定事件监听器
+            document.getElementById('antennaA').addEventListener('click', function() { setAntenna('A'); });
+            document.getElementById('antennaB').addEventListener('click', function() { setAntenna('B'); });
+            document.getElementById('antennaC').addEventListener('click', function() { setAntenna('C'); });
+            document.getElementById('antennaD').addEventListener('click', function() { setAntenna('D'); });
+            
+            document.getElementById('sampleDensity').addEventListener('change', function() {
+                density = parseInt(this.value);
+                generateData(activeAntenna, density);
+            });
+            
+            document.getElementById('updateBtn').addEventListener('click', function() {
+                generateData(activeAntenna, density);
+            });
+            
+            // 绘制坐标系示意图
+            drawCoordinateSystem();
+        });
+        
+        // 设置当前天线
+        function setAntenna(antenna) {
+            activeAntenna = antenna;
+            document.querySelectorAll('[id^="antenna"]').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            document.getElementById(`antenna${antenna}`).classList.add('active');
+            generateData(antenna, density);
+        }
+        
+        // 生成模拟数据
+        function generateData(antenna, density) {
+            samples = [];
+            const numPoints = density * density;
+            
+            for (let i = 0; i < numPoints; i++) {
+                // 黄金螺旋算法生成均匀分布的球面点
+                const y = 1 - (i / (numPoints - 1)) * 2;  // y从1到-1
+                const radius = Math.sqrt(1 - y * y);  // 半径
+                
+                // 黄金角
+                const theta = 2 * Math.PI * i * 0.618033988749895;
+                
+                const x = Math.cos(theta) * radius;
+                const z = Math.sin(theta) * radius;
+                
+                // 转换为球坐标
+                const r = 1.0;  // 单位球
+                const phi = Math.atan2(z, x);  // 方位角
+                const thetaSphere = Math.acos(y);  // 天顶角
+                
+                // 计算信号强度
+                const dbm = calculateSignalStrength(thetaSphere, phi, antennaPositions[antenna]);
+                
+                samples.push({
+                    x, y, z,
+                    r, theta: thetaSphere, phi,
+                    dbm
+                });
+            }
+            
+            // 更新图表
+            updateCharts();
+            
+            // 计算并更新TRP值
+            updateTRPValues();
+        }
+        
+        // 计算信号强度
+        function calculateSignalStrength(theta, phi, antennaPos) {
+            const antX = antennaPos.x;
+            const antY = antennaPos.y;
+            const antZ = antennaPos.z;
+            
+            // 天线位置转换为球坐标
+            const antR = Math.sqrt(antX * antX + antY * antY + antZ * antZ);
+            const antTheta = Math.acos(antZ / antR);
+            const antPhi = Math.atan2(antY, antX);
+            
+            // 计算角距离
+            const angularDistance = Math.acos(
+                Math.sin(theta) * Math.sin(antTheta) * Math.cos(phi - antPhi) + 
+                Math.cos(theta) * Math.cos(antTheta)
+            );
+            
+            // 信号强度计算
+            let dbm = -40 + 45 * Math.exp(-8 * angularDistance);
+            dbm += (Math.random() * 4 - 2); // ±2dBm随机噪声
+            dbm = Math.min(dbm, 0); // 不超过0dBm
+            
+            return dbm;
+        }
+        
+        // 初始化图表
+        function initCharts() {
+            // 全球面热力图
+            const fullSphereCtx = document.getElementById('fullSphereHeatmap').getContext('2d');
+            window.fullSphereChart = new Chart(fullSphereCtx, {
+                type: 'scatter',
+                data: { datasets: [{ data: [] }] },
+                options: getHeatmapOptions('全球面辐射热力图', true)
+            });
+            
+            // 半圆热力图
+            const halfSphereCtx = document.getElementById('halfSphereHeatmap').getContext('2d');
+            window.halfSphereChart = new Chart(halfSphereCtx, {
+                type: 'scatter',
+                data: { datasets: [{ data: [] }] },
+                options: getHeatmapOptions('正面半球辐射热力图', false)
+            });
+            
+            // 3D球面图
+            const threeDSphereCtx = document.getElementById('threeDSpherePlot').getContext('2d');
+            window.threeDSphereChart = new Chart(threeDSphereCtx, {
+                type: 'scatter',
+                data: { datasets: [
+                    { data: [], label: '全球面' },
+                    { data: [], label: '正面半球' }
+                ]},
+                options: getThreeDSphereOptions()
+            });
+        }
+        
+        // 获取热力图配置
+        function getHeatmapOptions(title, isFullSphere) {
+            return {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                const point = context.parsed;
+                                return [`坐标: (${point.x.toFixed(2)}, ${point.y.toFixed(2)})`, 
+                                       `信号强度: ${point.r.toFixed(2)} dBm`];
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        type: 'linear',
+                        position: 'center',
+                        min: isFullSphere ? -1 : 0,
+                        max: isFullSphere ? 1 : 1,
+                        ticks: { display: false },
+                        grid: { color: 'rgba(0, 0, 0, 0.05)' }
+                    },
+                    y: {
+                        type: 'linear',
+                        position: 'center',
+                        min: -1,
+                        max: 1,
+                        ticks: { display: false },
+                        grid: { color: 'rgba(0, 0, 0, 0.05)' }
+                    }
+                },
+                elements: {
+                    point: {
+                        radius: 3,
+                        hoverRadius: 6
+                    }
+                }
+            };
+        }
+        
+        // 获取3D球面图配置
+        function getThreeDSphereOptions() {
+            return {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: true, position: 'top' },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                const point = context.parsed;
+                                return [`球坐标: (${point.r.toFixed(2)}, ${point.theta.toFixed(2)}, ${point.phi.toFixed(2)})`,
+                                       `直角坐标: (${point.x.toFixed(2)}, ${point.y.toFixed(2)}, ${point.z.toFixed(2)})`,
+                                       `信号强度: ${point.dbm.toFixed(2)} dBm`];
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        type: 'linear',
+                        position: 'center',
+                        min: -1.2,
+                        max: 1.2,
+                        ticks: { display: false },
+                        grid: { color: 'rgba(0, 0, 0, 0.05)' }
+                    },
+                    y: {
+                        type: 'linear',
+                        position: 'center',
+                        min: -1.2,
+                        max: 1.2,
+                        ticks: { display: false },
+                        grid: { color: 'rgba(0, 0, 0, 0.05)' }
+                    }
+                },
+                elements: {
+                    point: {
+                        radius: 2,
+                        hoverRadius: 5
+                    }
+                }
+            };
+        }
+        
+        // 更新图表数据
+        function updateCharts() {
+            // 准备数据
+            const fullSphereData = [];
+            const halfSphereData = [];
+            const threeDSphereAllData = [];
+            const threeDSphereHalfData = [];
+            
+            // 颜色映射函数
+            function getColor(dbm) {
+                const t = (dbm + 40) / 40; // 映射到[0,1]
+                const r = Math.floor(247 - 247 * t);
+                const g = Math.floor(251 - 191 * t);
+                const b = Math.floor(255 - 155 * t);
+                return `rgb(${r}, ${g}, ${b})`;
+            }
+            
+            samples.forEach(point => {
+                // 全球面数据
+                fullSphereData.push({
+                    x: point.x,
+                    y: point.y,
+                    r: point.dbm,
+                    backgroundColor: getColor(point.dbm),
+                    pointRadius: 3 + (point.dbm + 40) / 40 * 7 // 半径3-10
+                });
+                
+                // 3D球面数据
+                threeDSphereAllData.push({
+                    x: point.x,
+                    y: point.z, // 交换y和z以获得更好的视角
+                    r: point.dbm,
+                    backgroundColor: getColor(point.dbm),
+                    pointRadius: 2 + (point.dbm + 40) / 40 * 5, // 半径2-7
+                    theta: point.theta,
+                    phi: point.phi,
+                    dbm: point.dbm
+                });
+                
+                // 半圆数据（X>0）
+                if (point.x > 0) {
+                    halfSphereData.push({
+                        x: point.x,
+                        y: point.y,
+                        r: point.dbm,
+                        backgroundColor: getColor(point.dbm),
+                        pointRadius: 3 + (point.dbm + 40) / 40 * 7
+                    });
+                    
+                    threeDSphereHalfData.push({
+                        x: point.x,
+                        y: point.z,
+                        r: point.dbm,
+                        backgroundColor: getColor(point.dbm),
+                        pointRadius: 2 + (point.dbm + 40) / 40 * 5,
+                        theta: point.theta,
+                        phi: point.phi,
+                        dbm: point.dbm
+                    });
+                }
+            });
+            
+            // 更新全球面热力图
+            fullSphereChart.data.datasets[0] = {
+                data: fullSphereData.map(p => ({x: p.x, y: p.y})),
+                backgroundColor: fullSphereData.map(p => p.backgroundColor),
+                pointRadius: fullSphereData.map(p => p.pointRadius),
+                pointHoverRadius: fullSphereData.map(p => p.pointRadius + 3)
+            };
+            fullSphereChart.update();
+            
+            // 更新半圆热力图
+            halfSphereChart.data.datasets[0] = {
+                data: halfSphereData.map(p => ({x: p.x, y: p.y})),
+                backgroundColor: halfSphereData.map(p => p.backgroundColor),
+                pointRadius: halfSphereData.map(p => p.pointRadius),
+                pointHoverRadius: halfSphereData.map(p => p.pointRadius + 3)
+            };
+            halfSphereChart.update();
+            
+            // 更新3D球面图
+            threeDSphereChart.data.datasets[0] = {
+                data: threeDSphereAllData.map(p => ({x: p.x, y: p.y})),
+                backgroundColor: threeDSphereAllData.map(p => p.backgroundColor),
+                pointRadius: threeDSphereAllData.map(p => p.pointRadius),
+                pointHoverRadius: threeDSphereAllData.map(p => p.pointRadius + 3),
+                borderWidth: 0,
+                label: '全球面'
+            };
+            
+            threeDSphereChart.data.datasets[1] = {
+                data: threeDSphereHalfData.map(p => ({x: p.x, y: p.y})),
+                backgroundColor: threeDSphereHalfData.map(p => p.backgroundColor),
+                pointRadius: threeDSphereHalfData.map(p => p.pointRadius),
+                pointHoverRadius: threeDSphereHalfData.map(p => p.pointRadius + 3),
+                borderWidth: 0,
+                label: '正面半球'
+            };
+            
+            threeDSphereChart.update();
+        }
+        
+        // 计算并更新TRP值
+        function updateTRPValues() {
+            // 计算全球面TRP
+            const totalTRP = calculateTRP(samples);
+            
+            // 计算半圆TRP
+            const halfSphereSamples = samples.filter(point => point.x > 0);
+            const halfSphereTRP = calculateTRP(halfSphereSamples);
+            
+            // 更新显示
+            document.getElementById('totalTRP').textContent = totalTRP.toFixed(2) + ' dBm';
+            document.getElementById('halfSphereTRP').textContent = halfSphereTRP.toFixed(2) + ' dBm';
+        }
+        
+        // 计算TRP
+        function calculateTRP(samples) {
+            if (samples.length === 0) return -Infinity;
+            
+            const deltaTheta = Math.PI / (density - 1);
+            const deltaPhi = 2 * Math.PI / (density - 1);
+            
+            let trp = 0;
+            samples.forEach(point => {
+                const sinTheta = Math.sin(point.theta);
+                const linearPower = Math.pow(10, point.dbm / 10); // dBm转线性功率
+                trp += linearPower * sinTheta * deltaTheta * deltaPhi;
+            });
+            
+            return trp > 0 ? 10 * Math.log10(trp) : -Infinity; // 转回dBm
+        }
+        
+        // 绘制坐标系示意图
+        function drawCoordinateSystem() {
+            const canvas = document.getElementById('coordinateCanvas');
+            const ctx = canvas.getContext('2d');
+            const centerX = canvas.width / 2;
+            const centerY = canvas.height / 2;
+            const radius = 150;
+            
+            // 清空画布
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // 绘制坐标轴
+            // X轴（红色，水平向右）
+            ctx.beginPath();
+            ctx.moveTo(centerX - radius, centerY);
+            ctx.lineTo(centerX + radius, centerY);
+            ctx.strokeStyle = 'red';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+            ctx.fillStyle = 'red';
+            ctx.beginPath();
+            ctx.arc(centerX + radius, centerY, 8, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = 'white';
+            ctx.font = '12px Arial';
+            ctx.textAlign = 'left';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('X轴', centerX + radius + 10, centerY);
+            
+            // Y轴（绿色，垂直向下）
+            ctx.beginPath();
+            ctx.moveTo(centerX, centerY - radius);
+            ctx.lineTo(centerX, centerY + radius);
+            ctx.strokeStyle = 'green';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+            ctx.fillStyle = 'green';
+            ctx.beginPath();
+            ctx.arc(centerX, centerY + radius, 8, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = 'white';
+            ctx.font = '12px Arial';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'top';
+            ctx.fillText('Y轴', centerX, centerY + radius + 10);
+            
+            // Z轴（蓝色，垂直纸面向上）
+            ctx.beginPath();
+            ctx.moveTo(centerX, centerY);
+            const zEndX = centerX + radius * Math.cos(Math.PI / 4);
+            const zEndY = centerY - radius * Math.sin(Math.PI / 4);
+            ctx.lineTo(zEndX, zEndY);
+            ctx.strokeStyle = 'blue';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+            ctx.fillStyle = 'blue';
+            ctx.beginPath();
+            ctx.arc(zEndX, zEndY, 8, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = 'white';
+            ctx.font = '12px Arial';
+            ctx.textAlign = 'left';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('Z轴', zEndX + 10, zEndY);
+            
+            // 绘制手机示意图（灰色矩形）
+            ctx.fillStyle = 'gray';
+            ctx.fillRect(centerX - 60, centerY - 40, 120, 80);
+            ctx.fillStyle = 'white';
+            ctx.fillRect(centerX - 50, centerY - 30, 100, 60);
+            
+            // 绘制半圆区域（蓝色半透明）
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, radius * 0.7, -Math.PI/2, Math.PI/2);
+            ctx.lineTo(centerX, centerY);
+            ctx.closePath();
+            ctx.fillStyle = 'rgba(59, 130, 246, 0.1)';
+            ctx.fill();
+            ctx.strokeStyle = 'blue';
+            ctx.lineWidth = 1;
+            ctx.stroke();
+            
+            // 添加说明文字
+            ctx.fillStyle = 'black';
+            ctx.font = '14px Arial';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'top';
+            ctx.fillText('手机正面', centerX, centerY - 90);
+            ctx.fillText('正面半球区域', centerX + radius * 0.5, centerY);
+        }
+    </script>
+</body>
+</html>

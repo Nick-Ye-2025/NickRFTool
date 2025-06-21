@@ -1,0 +1,9 @@
+{
+    "name": "网络诊断",
+    "category": "系统工具",
+    "type": "script",
+    "command": "ping 127.0.0.1 -n 4",
+    "icon": "network.png",
+    "windows_cmd": "ping 127.0.0.1 -n 4",
+    "macos_cmd": "ping 127.0.0.1 -c 4"
+}

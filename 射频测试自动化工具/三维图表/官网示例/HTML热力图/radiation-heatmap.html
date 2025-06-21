@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>手机TRP辐射信号热力图</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.8/dist/chart.umd.min.js"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#3B82F6',
+                        secondary: '#10B981',
+                        dark: '#1E293B',
+                        light: '#F8FAFC'
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'system-ui', 'sans-serif'],
+                    },
+                }
+            }
+        }
+    </script>
+    <style type="text/tailwindcss">
+        @layer utilities {
+            .content-auto {
+                content-visibility: auto;
+            }
+            .glass {
+                background: rgba(255, 255, 255, 0.25);
+                backdrop-filter: blur(4px);
+                -webkit-backdrop-filter: blur(4px);
+                border: 1px solid rgba(255, 255, 255, 0.18);
+            }
+            .shadow-soft {
+                box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.1);
+            }
+            .transition-smooth {
+                transition: all 0.3s ease-in-out;
+            }
+        }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-gray-900 to-gray-800 text-light min-h-screen">
+    <div class="container mx-auto px-4 py-8">
+        <!-- 标题区域 -->
+        <header class="mb-10 text-center">
+            <h1 class="text-[clamp(1.8rem,4vw,2.8rem)] font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-teal-400 mb-3">
+                手机TRP辐射信号热力图分析
+            </h1>
+            <p class="text-gray-300 max-w-2xl mx-auto text-[clamp(1rem,2vw,1.2rem)]">
+                基于2000MHz频率信号的辐射强度可视化分析，帮助优化手机天线设计
+            </p>
+        </header>
+
+        <!-- 主内容区域 -->
+        <main class="grid md:grid-cols-2 gap-8">
+            <!-- 热力图1：手机BG面 -->
+            <div class="bg-gray-800/50 rounded-xl p-6 shadow-lg transform hover:scale-[1.01] transition-smooth">
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="text-xl font-semibold text-white flex items-center">
+                        <i class="fa fa-mobile-phone mr-2 text-blue-400 text-2xl"></i>
+                        手机BG面辐射热力图
+                    </h2>
+                    <div class="bg-gray-700/70 px-3 py-1 rounded-full text-sm">
+                        <span class="text-blue-400">2000MHz</span>
+                    </div>
+                </div>
+                <div class="aspect-square relative">
+                    <canvas id="heatmap1" class="w-full h-full rounded-lg"></canvas>
+                    <div class="absolute inset-0 flex items-center justify-center pointer-events-none">
+                        <div class="w-[25%] h-[60%] bg-gray-200/10 rounded-lg border-2 border-gray-400/30 transform rotate-90"></div>
+                    </div>
+                </div>
+                <div class="mt-4 flex justify-between items-center">
+                    <div class="text-sm text-gray-400">
+                        <i class="fa fa-info-circle mr-1"></i> 信号强度参考
+                    </div>
+                    <div class="flex items-center">
+                        <div class="w-3 h-3 rounded-full bg-blue-600 mr-1"></div>
+                        <span class="text-xs text-gray-300 mr-3">弱信号</span>
+                        <div class="w-3 h-3 rounded-full bg-red-600 mr-1"></div>
+                        <span class="text-xs text-gray-300">强信号</span>
+                    </div>
+                </div>
+                <div class="mt-3 text-sm text-gray-400">
+                    <p class="flex items-center"><i class="fa fa-thermometer-quarter mr-2 text-blue-400"></i> 平均辐射强度: <span class="text-white">18.7 dBm</span></p>
+                    <p class="flex items-center"><i class="fa fa-thermometer-full mr-2 text-red-500"></i> 最大辐射强度: <span class="text-white">24.3 dBm</span> (正面)</p>
+                </div>
+            </div>
+
+            <!-- 热力图2：手机CG面 -->
+            <div class="bg-gray-800/50 rounded-xl p-6 shadow-lg transform hover:scale-[1.01] transition-smooth">
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="text-xl font-semibold text-white flex items-center">
+                        <i class="fa fa-mobile-phone mr-2 text-teal-400 text-2xl"></i>
+                        手机CG面辐射热力图
+                    </h2>
+                    <div class="bg-gray-700/70 px-3 py-1 rounded-full text-sm">
+                        <span class="text-teal-400">2000MHz</span>
+                    </div>
+                </div>
+                <div class="aspect-square relative">
+                    <canvas id="heatmap2" class="w-full h-full rounded-lg"></canvas>
+                    <div class="absolute inset-0 flex items-center justify-center pointer-events-none">
+                        <div class="w-[25%] h-[60%] bg-gray-200/10 rounded-lg border-2 border-gray-400/30 transform -rotate-90"></div>
+                    </div>
+                </div>
+                <div class="mt-4 flex justify-between items-center">
+                    <div class="text-sm text-gray-400">
+                        <i class="fa fa-info-circle mr-1"></i> 信号强度参考
+                    </div>
+                    <div class="flex items-center">
+                        <div class="w-3 h-3 rounded-full bg-blue-600 mr-1"></div>
+                        <span class="text-xs text-gray-300 mr-3">弱信号</span>
+                        <div class="w-3 h-3 rounded-full bg-red-600 mr-1"></div>
+                        <span class="text-xs text-gray-300">强信号</span>
+                    </div>
+                </div>
+                <div class="mt-3 text-sm text-gray-400">
+                    <p class="flex items-center"><i class="fa fa-thermometer-quarter mr-2 text-blue-400"></i> 平均辐射强度: <span class="text-white">16.5 dBm</span></p>
+                    <p class="flex items-center"><i class="fa fa-thermometer-full mr-2 text-red-500"></i> 最大辐射强度: <span class="text-white">22.1 dBm</span> (背面)</p>
+                </div>
+            </div>
+        </main>
+
+        <!-- 分析和建议区域 -->
+        <div class="mt-10 bg-gray-800/30 rounded-xl p-6 shadow-lg">
+            <h2 class="text-xl font-semibold text-white mb-4 flex items-center">
+                <i class="fa fa-bar-chart mr-2 text-purple-400"></i>
+                辐射数据分析与天线优化建议
+            </h2>
+            <div class="grid md:grid-cols-2 gap-6">
+                <div class="space-y-4">
+                    <div class="bg-gray-700/20 rounded-lg p-4">
+                        <h3 class="text-white font-medium mb-2 flex items-center">
+                            <i class="fa fa-line-chart mr-2 text-blue-400"></i>
+                            数据分析
+                        </h3>
+                        <ul class="text-gray-300 space-y-2 text-sm">
+                            <li class="flex items-start">
+                                <i class="fa fa-check-circle text-green-400 mt-1 mr-2"></i>
+                                <span>手机BG面辐射强度整体高于CG面，平均高出约2.2 dBm</span>
+                            </li>
+                            <li class="flex items-start">
+                                <i class="fa fa-check-circle text-green-400 mt-1 mr-2"></i>
+                                <span>最大辐射点位于手机顶部，达到24.3 dBm，建议重点关注此区域天线设计</span>
+                            </li>
+                            <li class="flex items-start">
+                                <i class="fa fa-check-circle text-green-400 mt-1 mr-2"></i>
+                                <span>手机底部辐射强度较弱，可考虑增加辅助天线或优化信号反射路径</span>
+                            </li>
+                            <li class="flex items-start">
+                                <i class="fa fa-check-circle text-green-400 mt-1 mr-2"></i>
+                                <span>侧面辐射分布较为均匀，可作为次要优化方向</span>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+                <div class="space-y-4">
+                    <div class="bg-gray-700/20 rounded-lg p-4">
+                        <h3 class="text-white font-medium mb-2 flex items-center">
+                            <i class="fa fa-lightbulb-o mr-2 text-yellow-400"></i>
+                            优化建议
+                        </h3>
+                        <ul class="text-gray-300 space-y-2 text-sm">
+                            <li class="flex items-start">
+                                <i class="fa fa-arrow-up text-blue-400 mt-1 mr-2"></i>
+                                <span>在手机顶部区域增加信号屏蔽层，减少对人体头部的辐射</span>
+                            </li>
+                            <li class="flex items-start">
+                                <i class="fa fa-arrow-up text-blue-400 mt-1 mr-2"></i>
+                                <span>优化手机底部天线布局，考虑使用多天线技术提高信号强度</span>
+                            </li>
+                            <li class="flex items-start">
+                                <i class="fa fa-arrow-up text-blue-400 mt-1 mr-2"></i>
+                                <span>在CG面增加反射材料，增强背向辐射能力</span>
+                            </li>
+                            <li class="flex items-start">
+                                <i class="fa fa-arrow-up text-blue-400 mt-1 mr-2"></i>
+                                <span>考虑使用智能天线技术，根据手机使用状态动态调整辐射模式</span>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 页脚 -->
+        <footer class="mt-10 text-center text-gray-500 text-sm">
+            <p>© 2025 手机辐射测试与优化系统 | 数据可视化分析工具</p>
+        </footer>
+    </div>
+
+    <script>
+        // 随机生成辐射数据函数
+        function generateRadiationData(centerValue, deviation, size = 100) {
+            const data = [];
+            const centerX = size / 2;
+            const centerY = size / 2;
+            
+            for (let y = 0; y < size; y++) {
+                for (let x = 0; x < size; x++) {
+                    // 计算到中心的距离
+                    const distance = Math.sqrt(Math.pow(x - centerX, 2) + Math.pow(y - centerY, 2));
+                    // 距离中心越远，信号越弱（基础衰减）
+                    const baseValue = centerValue - (distance / (size / 2)) * deviation;
+                    
+                    // 添加随机波动
+                    const randomFluctuation = (Math.random() - 0.5) * deviation * 0.3;
+                    // 确保信号强度不会为负
+                    const value = Math.max(5, baseValue + randomFluctuation);
+                    
+                    data.push({x, y, value});
+                }
+            }
+            
+            return data;
+        }
+
+        // 创建热力图函数
+        function createHeatmap(canvasId, centerValue, rotation, title) {
+            const canvas = document.getElementById(canvasId);
+            const ctx = canvas.getContext('2d');
+            
+            // 设置canvas尺寸与显示尺寸一致
+            const dpr = window.devicePixelRatio || 1;
+            const rect = canvas.getBoundingClientRect();
+            canvas.width = rect.width * dpr;
+            canvas.height = rect.height * dpr;
+            ctx.scale(dpr, dpr);
+            
+            // 重置canvas样式尺寸
+            canvas.style.width = `${rect.width}px`;
+            canvas.style.height = `${rect.height}px`;
+            
+            // 生成辐射数据
+            const data = generateRadiationData(centerValue, 10);
+            
+            // 创建渐变
+            const gradient = ctx.createLinearGradient(0, 0, rect.width, 0);
+            gradient.addColorStop(0, '#000080'); // 深蓝色
+            gradient.addColorStop(0.2, '#0000FF'); // 蓝色
+            gradient.addColorStop(0.4, '#00FFFF'); // 青色
+            gradient.addColorStop(0.5, '#00FF00'); // 绿色
+            gradient.addColorStop(0.6, '#FFFF00'); // 黄色
+            gradient.addColorStop(0.8, '#FF7F00'); // 橙色
+            gradient.addColorStop(1, '#FF0000'); // 红色
+            
+            // 绘制热力图
+            const cellSize = rect.width / 100;
+            data.forEach(point => {
+                // 根据信号强度确定颜色
+                let normalizedValue = (point.value - 5) / 30; // 假设信号范围5-35dBm
+                normalizedValue = Math.max(0, Math.min(1, normalizedValue));
+                
+                // 获取渐变颜色
+                const gradientCanvas = document.createElement('canvas');
+                const gradientCtx = gradientCanvas.getContext('2d');
+                gradientCanvas.width = 1;
+                gradientCanvas.height = 1;
+                gradientCtx.fillStyle = gradient;
+                gradientCtx.fillRect(0, 0, 1, 1);
+                const imageData = gradientCtx.getImageData(0, 0, 1, 1);
+                const data = imageData.data;
+                
+                // 计算当前点的颜色
+                const r = Math.round(data[0] * normalizedValue);
+                const g = Math.round(data[1] * normalizedValue);
+                const b = Math.round(data[2] * normalizedValue);
+                
+                // 绘制点
+                ctx.fillStyle = `rgba(${r}, ${g}, ${b}, 0.8)`;
+                ctx.fillRect(point.x * cellSize, point.y * cellSize, cellSize, cellSize);
+            });
+            
+            // 绘制强度标记环
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+            ctx.lineWidth = 1;
+            const center = rect.width / 2;
+            const radiusStep = center / 4;
+            
+            for (let i = 1; i <= 3; i++) {
+                ctx.beginPath();
+                ctx.arc(center, center, radiusStep * i, 0, 2 * Math.PI);
+                ctx.stroke();
+                
+                // 标记距离
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
+                ctx.font = '10px Arial';
+                ctx.fillText(`${i * 25}°`, center + radiusStep * i, center - 5);
+            }
+            
+            // 绘制方向标记
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+            ctx.font = '12px Arial';
+            ctx.fillText('上', center - 5, 15);
+            ctx.fillText('下', center - 5, rect.height - 5);
+            ctx.fillText('左', 10, center + 5);
+            ctx.fillText('右', rect.width - 20, center + 5);
+            
+            // 绘制中心十字线
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(center, 0);
+            ctx.lineTo(center, rect.height);
+            ctx.moveTo(0, center);
+            ctx.lineTo(rect.width, center);
+            ctx.stroke();
+            
+            // 添加图例
+            const legendWidth = 150;
+            const legendHeight = 20;
+            const legendX = (rect.width - legendWidth) / 2;
+            const legendY = rect.height - 30;
+            
+            // 绘制渐变色条
+            const legendGradient = ctx.createLinearGradient(legendX, legendY, legendX + legendWidth, legendY);
+            legendGradient.addColorStop(0, '#000080');
+            legendGradient.addColorStop(0.2, '#0000FF');
+            legendGradient.addColorStop(0.4, '#00FFFF');
+            legendGradient.addColorStop(0.5, '#00FF00');
+            legendGradient.addColorStop(0.6, '#FFFF00');
+            legendGradient.addColorStop(0.8, '#FF7F00');
+            legendGradient.addColorStop(1, '#FF0000');
+            
+            ctx.fillStyle = legendGradient;
+            ctx.fillRect(legendX, legendY, legendWidth, legendHeight);
+            
+            // 添加刻度
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
+            ctx.lineWidth = 1;
+            
+            for (let i = 0; i <= 5; i++) {
+                const x = legendX + (legendWidth / 5) * i;
+                ctx.beginPath();
+                ctx.moveTo(x, legendY);
+                ctx.lineTo(x, legendY - 5);
+                ctx.stroke();
+                
+                // 添加数值标签
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+                ctx.font = '10px Arial';
+                const value = Math.round(5 + (i * 6)); // 5-35dBm
+                ctx.fillText(`${value}dBm`, x - 8, legendY - 8);
+            }
+            
+            // 添加图例标题
+            ctx.fillText('信号强度 (dBm)', legendX + legendWidth / 2 - 25, legendY - 20);
+        }
+
+        // 页面加载完成后创建热力图
+        window.addEventListener('DOMContentLoaded', () => {
+            // 为两个热力图使用不同的中心值，模拟不同面的辐射情况
+            createHeatmap('heatmap1', 22, 0, '手机BG面辐射热力图');
+            createHeatmap('heatmap2', 18, 180, '手机CG面辐射热力图');
+            
+            // 添加响应式处理
+            window.addEventListener('resize', () => {
+                createHeatmap('heatmap1', 22, 0, '手机BG面辐射热力图');
+                createHeatmap('heatmap2', 18, 180, '手机CG面辐射热力图');
+            });
+        });
+    </script>
+</body>
+</html>
+    

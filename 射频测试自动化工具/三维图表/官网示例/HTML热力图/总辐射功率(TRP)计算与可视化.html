@@ -1,0 +1,671 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TRP计算与坐标系转换可视化工具</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.8/dist/chart.umd.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#3B82F6',
+                        secondary: '#10B981',
+                        accent: '#8B5CF6',
+                        dark: '#1E293B',
+                        light: '#F8FAFC'
+                    },
+                    fontFamily: {
+                        inter: ['Inter', 'sans-serif'],
+                    },
+                }
+            }
+        }
+    </script>
+    
+    <style type="text/tailwindcss">
+        @layer utilities {
+            .content-auto {
+                content-visibility: auto;
+            }
+            .card-shadow {
+                box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.02);
+            }
+            .gradient-bg {
+                background: linear-gradient(135deg, #3B82F6 0%, #8B5CF6 100%);
+            }
+            .glass-effect {
+                backdrop-filter: blur(12px);
+                background-color: rgba(255, 255, 255, 0.7);
+            }
+        }
+    </style>
+</head>
+<body class="font-inter bg-light min-h-screen">
+    <!-- 导航栏 -->
+    <nav class="fixed w-full top-0 z-50 glass-effect border-b border-gray-200/50">
+        <div class="container mx-auto px-4 py-3 flex justify-between items-center">
+            <div class="flex items-center space-x-2">
+                <i class="fa fa-bullseye text-primary text-2xl"></i>
+                <h1 class="text-xl font-semibold text-dark">TRP计算与可视化工具</h1>
+            </div>
+            <div class="hidden md:flex items-center space-x-6">
+                <a href="#theory" class="text-gray-600 hover:text-primary transition-colors">理论基础</a>
+                <a href="#calculation" class="text-gray-600 hover:text-primary transition-colors">计算方法</a>
+                <a href="#visualization" class="text-gray-600 hover:text-primary transition-colors">可视化</a>
+                <a href="#parameters" class="text-gray-600 hover:text-primary transition-colors">参数设置</a>
+            </div>
+            <button class="md:hidden text-dark text-xl">
+                <i class="fa fa-bars"></i>
+            </button>
+        </div>
+    </nav>
+
+    <!-- 主内容 -->
+    <main class="container mx-auto px-4 pt-24 pb-16">
+        <!-- 介绍部分 -->
+        <section class="mb-12 text-center max-w-3xl mx-auto">
+            <h2 class="text-[clamp(1.8rem,4vw,2.5rem)] font-bold text-dark mb-4">总辐射功率(TRP)计算与可视化</h2>
+            <p class="text-gray-600 text-lg mb-6">这个工具帮助你理解球坐标系到直角坐标系的转换，以及如何通过球面辐射数据计算TRP值。</p>
+            <div class="gradient-bg text-white py-3 px-6 rounded-full inline-block shadow-lg">
+                <p class="font-medium">TRP值: <span id="trp-value" class="font-bold">22.5</span> dBm</p>
+            </div>
+        </section>
+
+        <!-- 理论部分 -->
+        <section id="theory" class="mb-12 bg-white rounded-xl p-6 card-shadow">
+            <h3 class="text-xl font-semibold text-dark mb-4 flex items-center">
+                <i class="fa fa-book text-primary mr-2"></i>理论基础
+            </h3>
+            <div class="grid md:grid-cols-2 gap-6">
+                <div>
+                    <h4 class="font-medium text-gray-800 mb-2">球坐标系与直角坐标系转换</h4>
+                    <p class="text-gray-600 mb-4">在球坐标系中，一个点由三个参数表示：径向距离(r)、天顶角(θ)和方位角(φ)。</p>
+                    <div class="bg-gray-50 p-4 rounded-lg mb-4">
+                        <p class="font-medium text-gray-800 mb-2">转换公式:</p>
+                        <p class="text-gray-600">x = r·sin(θ)·cos(φ)</p>
+                        <p class="text-gray-600">y = r·sin(θ)·sin(φ)</p>
+                        <p class="text-gray-600">z = r·cos(θ)</p>
+                    </div>
+                </div>
+                <div>
+                    <h4 class="font-medium text-gray-800 mb-2">总辐射功率(TRP)计算</h4>
+                    <p class="text-gray-600 mb-4">TRP是指设备在所有方向上辐射的总功率，通过对整个球面积分得到。</p>
+                    <div class="bg-gray-50 p-4 rounded-lg">
+                        <p class="font-medium text-gray-800 mb-2">积分公式:</p>
+                        <p class="text-gray-600">TRP = ∫∫ P(θ,φ)·sin(θ) dθ dφ</p>
+                        <p class="text-gray-600 mt-2">其中P(θ,φ)是方向(θ,φ)上的辐射功率密度</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 计算方法 -->
+        <section id="calculation" class="mb-12 bg-white rounded-xl p-6 card-shadow">
+            <h3 class="text-xl font-semibold text-dark mb-4 flex items-center">
+                <i class="fa fa-calculator text-primary mr-2"></i>计算方法
+            </h3>
+            <div class="grid md:grid-cols-3 gap-6">
+                <div class="bg-blue-50 p-4 rounded-lg">
+                    <h4 class="font-medium text-blue-800 mb-2 flex items-center">
+                        <i class="fa fa-globe text-blue-600 mr-2"></i>1. 球面采样
+                    </h4>
+                    <p class="text-gray-600">在球面上均匀采样离散点，每个点代表一个测量方向。</p>
+                </div>
+                <div class="bg-green-50 p-4 rounded-lg">
+                    <h4 class="font-medium text-green-800 mb-2 flex items-center">
+                        <i class="fa fa-exchange text-green-600 mr-2"></i>2. 坐标转换
+                    </h4>
+                    <p class="text-gray-600">将每个采样点的球坐标转换为直角坐标(x,y,z)。</p>
+                </div>
+                <div class="bg-purple-50 p-4 rounded-lg">
+                    <h4 class="font-medium text-purple-800 mb-2 flex items-center">
+                        <i class="fa fa-sigma text-purple-600 mr-2"></i>3. 数值积分
+                    </h4>
+                    <p class="text-gray-600">使用离散采样点的值，通过数值积分方法近似计算TRP。</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- 可视化部分 -->
+        <section id="visualization" class="mb-12">
+            <h3 class="text-xl font-semibold text-dark mb-6 flex items-center">
+                <i class="fa fa-eye text-primary mr-2"></i>辐射模式可视化
+            </h3>
+            
+            <div class="grid md:grid-cols-2 gap-6 mb-8">
+                <!-- 正面热力图 -->
+                <div class="bg-white rounded-xl p-6 card-shadow">
+                    <div class="flex justify-between items-center mb-4">
+                        <h4 class="font-medium text-gray-800">手机正面辐射热力图</h4>
+                        <div class="text-xs text-gray-500">
+                            <span class="inline-block w-3 h-3 bg-gradient-to-r from-blue-500 via-green-500 to-red-500 rounded-full mr-1"></span>
+                            信号强度 (-40dBm 至 0dBm)
+                        </div>
+                    </div>
+                    <div class="relative aspect-square">
+                        <canvas id="frontHeatmap" class="w-full h-full"></canvas>
+                    </div>
+                </div>
+                
+                <!-- 背面热力图 -->
+                <div class="bg-white rounded-xl p-6 card-shadow">
+                    <div class="flex justify-between items-center mb-4">
+                        <h4 class="font-medium text-gray-800">手机背面辐射热力图</h4>
+                        <div class="text-xs text-gray-500">
+                            <span class="inline-block w-3 h-3 bg-gradient-to-r from-blue-500 via-green-500 to-red-500 rounded-full mr-1"></span>
+                            信号强度 (-40dBm 至 0dBm)
+                        </div>
+                    </div>
+                    <div class="relative aspect-square">
+                        <canvas id="backHeatmap" class="w-full h-full"></canvas>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 3D球坐标可视化 -->
+            <div class="bg-white rounded-xl p-6 card-shadow mb-8">
+                <h4 class="font-medium text-gray-800 mb-4">3D球坐标系辐射分布</h4>
+                <div class="relative aspect-video">
+                    <canvas id="spherePlot" class="w-full h-full"></canvas>
+                </div>
+            </div>
+        </section>
+
+        <!-- 参数设置 -->
+        <section id="parameters" class="bg-white rounded-xl p-6 card-shadow">
+            <h3 class="text-xl font-semibold text-dark mb-6 flex items-center">
+                <i class="fa fa-sliders text-primary mr-2"></i>参数设置
+            </h3>
+            
+            <div class="grid md:grid-cols-2 gap-6 mb-6">
+                <div>
+                    <label for="sample-density" class="block text-sm font-medium text-gray-700 mb-2">采样密度</label>
+                    <input type="range" id="sample-density" min="10" max="100" value="30" class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-primary">
+                    <div class="flex justify-between text-xs text-gray-500 mt-1">
+                        <span>低</span>
+                        <span id="sample-density-value">30</span>
+                        <span>高</span>
+                    </div>
+                </div>
+                
+                <div>
+                    <label for="radiation-direction" class="block text-sm font-medium text-gray-700 mb-2">辐射方向</label>
+                    <select id="radiation-direction" class="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary">
+                        <option value="front-top-left">正面-左上方</option>
+                        <option value="front-top-right">正面-右上方</option>
+                        <option value="front-bottom-left">正面-左下方</option>
+                        <option value="front-bottom-right">正面-右下方</option>
+                        <option value="back-top-left">背面-左上方</option>
+                        <option value="back-top-right">背面-右上方</option>
+                        <option value="back-bottom-left">背面-左下方</option>
+                        <option value="back-bottom-right">背面-右下方</option>
+                    </select>
+                </div>
+            </div>
+            
+            <button id="regenerate-data" class="gradient-bg text-white py-2 px-6 rounded-lg shadow hover:shadow-lg transition-all duration-300 flex items-center">
+                <i class="fa fa-refresh mr-2"></i>重新生成数据
+            </button>
+        </section>
+    </main>
+
+    <!-- 页脚 -->
+    <footer class="bg-dark text-white py-8">
+        <div class="container mx-auto px-4">
+            <div class="grid md:grid-cols-3 gap-8">
+                <div>
+                    <h4 class="text-lg font-semibold mb-4">TRP计算与可视化工具</h4>
+                    <p class="text-gray-400 text-sm">这个工具帮助你理解和计算手机辐射的总辐射功率(TRP)，以及球坐标系到直角坐标系的转换。</p>
+                </div>
+                <div>
+                    <h4 class="text-lg font-semibold mb-4">相关资源</h4>
+                    <ul class="space-y-2 text-sm text-gray-400">
+                        <li><a href="#" class="hover:text-white transition-colors">辐射测量基础</a></li>
+                        <li><a href="#" class="hover:text-white transition-colors">TRP测试标准</a></li>
+                        <li><a href="#" class="hover:text-white transition-colors">坐标系转换指南</a></li>
+                    </ul>
+                </div>
+                <div>
+                    <h4 class="text-lg font-semibold mb-4">关于</h4>
+                    <p class="text-gray-400 text-sm">这个工具仅供学习和演示使用，不代表实际测试设备的性能。</p>
+                </div>
+            </div>
+            <div class="border-t border-gray-700 mt-8 pt-6 text-center text-gray-500 text-sm">
+                &copy; 2025 TRP计算与可视化工具 | 保留所有权利
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        // 全局变量
+        let samples = [];
+        let frontHeatmapChart, backHeatmapChart, spherePlotChart;
+        
+        // DOM加载完成后执行
+        document.addEventListener('DOMContentLoaded', function() {
+            // 初始化图表
+            initCharts();
+            
+            // 生成初始数据
+            generateData();
+            
+            // 绑定事件监听器
+            document.getElementById('sample-density').addEventListener('input', function(e) {
+                document.getElementById('sample-density-value').textContent = e.target.value;
+                generateData();
+            });
+            
+            document.getElementById('radiation-direction').addEventListener('change', generateData);
+            document.getElementById('regenerate-data').addEventListener('click', generateData);
+        });
+        
+        // 初始化图表
+        function initCharts() {
+            // 正面热力图
+            const frontHeatmapCtx = document.getElementById('frontHeatmap').getContext('2d');
+            frontHeatmapChart = new Chart(frontHeatmapCtx, {
+                type: 'scatter',
+                data: { datasets: [{ data: [] }] },
+                options: getHeatmapOptions('正面辐射热力图')
+            });
+            
+            // 背面热力图
+            const backHeatmapCtx = document.getElementById('backHeatmap').getContext('2d');
+            backHeatmapChart = new Chart(backHeatmapCtx, {
+                type: 'scatter',
+                data: { datasets: [{ data: [] }] },
+                options: getHeatmapOptions('背面辐射热力图')
+            });
+            
+            // 3D球坐标可视化
+            const spherePlotCtx = document.getElementById('spherePlot').getContext('2d');
+            spherePlotChart = new Chart(spherePlotCtx, {
+                type: 'scatter',
+                data: { datasets: [{ data: [] }] },
+                options: getSpherePlotOptions()
+            });
+        }
+        
+        // 获取热力图配置
+        function getHeatmapOptions(title) {
+            return {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                const point = context.parsed;
+                                return [`坐标: (${point.x.toFixed(2)}, ${point.y.toFixed(2)})`, 
+                                       `信号强度: ${point.r.toFixed(2)} dBm`];
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        type: 'linear',
+                        position: 'center',
+                        min: -1,
+                        max: 1,
+                        ticks: { display: false },
+                        grid: { color: 'rgba(0, 0, 0, 0.05)' }
+                    },
+                    y: {
+                        type: 'linear',
+                        position: 'center',
+                        min: -1,
+                        max: 1,
+                        ticks: { display: false },
+                        grid: { color: 'rgba(0, 0, 0, 0.05)' }
+                    }
+                },
+                elements: {
+                    point: {
+                        radius: 3,
+                        hoverRadius: 6
+                    }
+                }
+            };
+        }
+        
+        // 获取3D球坐标图配置
+        function getSpherePlotOptions() {
+            return {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                const point = context.parsed;
+                                return [`球坐标: (${point.r.toFixed(2)}, ${point.theta.toFixed(2)}, ${point.phi.toFixed(2)})`,
+                                       `直角坐标: (${point.x.toFixed(2)}, ${point.y.toFixed(2)}, ${point.z.toFixed(2)})`,
+                                       `信号强度: ${point.dbm.toFixed(2)} dBm`];
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        type: 'linear',
+                        position: 'center',
+                        min: -1.2,
+                        max: 1.2,
+                        ticks: { display: false },
+                        grid: { color: 'rgba(0, 0, 0, 0.05)' }
+                    },
+                    y: {
+                        type: 'linear',
+                        position: 'center',
+                        min: -1.2,
+                        max: 1.2,
+                        ticks: { display: false },
+                        grid: { color: 'rgba(0, 0, 0, 0.05)' }
+                    }
+                },
+                elements: {
+                    point: {
+                        radius: 2,
+                        hoverRadius: 5
+                    }
+                }
+            };
+        }
+        
+        // 生成模拟数据
+        function generateData() {
+            const density = parseInt(document.getElementById('sample-density').value);
+            const direction = document.getElementById('radiation-direction').value;
+            
+            // 清空现有数据
+            samples = [];
+            
+            // 生成球面采样点
+            const numPoints = density * density;
+            for (let i = 0; i < numPoints; i++) {
+                // 使用黄金螺旋算法在球面上均匀分布点
+                const y = 1 - (i / (numPoints - 1)) * 2;  // y从1到-1
+                const radius = Math.sqrt(1 - y * y);  // 半径
+                
+                // 黄金角
+                const theta = Math.PI * 2 * i * 0.618033988749895;
+                
+                const x = Math.cos(theta) * radius;
+                const z = Math.sin(theta) * radius;
+                
+                // 转换为球坐标
+                const r = 1;  // 单位球
+                const phi = Math.atan2(z, x);  // 方位角
+                const theta_sphere = Math.acos(y);  // 天顶角
+                
+                // 计算信号强度，根据选择的辐射方向调整
+                let dbm = calculateSignalStrength(theta_sphere, phi, direction);
+                
+                // 添加到样本
+                samples.push({
+                    x, y, z,
+                    r: r,
+                    theta: theta_sphere,
+                    phi: phi,
+                    dbm: dbm
+                });
+            }
+            
+            // 更新图表
+            updateCharts();
+            
+            // 计算并更新TRP值
+            updateTRPValue();
+        }
+        
+        // 计算信号强度
+        function calculateSignalStrength(theta, phi, direction) {
+            // 默认辐射方向为正面左上方
+            let hotspotTheta = Math.PI / 4;  // 45度
+            let hotspotPhi = -Math.PI / 4;   // -45度
+            let isFront = true;
+            
+            // 根据选择的方向调整热点位置
+            switch(direction) {
+                case 'front-top-left':
+                    hotspotTheta = Math.PI / 4;
+                    hotspotPhi = -Math.PI / 4;
+                    isFront = true;
+                    break;
+                case 'front-top-right':
+                    hotspotTheta = Math.PI / 4;
+                    hotspotPhi = Math.PI / 4;
+                    isFront = true;
+                    break;
+                case 'front-bottom-left':
+                    hotspotTheta = 3 * Math.PI / 4;
+                    hotspotPhi = -Math.PI / 4;
+                    isFront = true;
+                    break;
+                case 'front-bottom-right':
+                    hotspotTheta = 3 * Math.PI / 4;
+                    hotspotPhi = Math.PI / 4;
+                    isFront = true;
+                    break;
+                case 'back-top-left':
+                    hotspotTheta = Math.PI / 4;
+                    hotspotPhi = -3 * Math.PI / 4;
+                    isFront = false;
+                    break;
+                case 'back-top-right':
+                    hotspotTheta = Math.PI / 4;
+                    hotspotPhi = 3 * Math.PI / 4;
+                    isFront = false;
+                    break;
+                case 'back-bottom-left':
+                    hotspotTheta = 3 * Math.PI / 4;
+                    hotspotPhi = -3 * Math.PI / 4;
+                    isFront = false;
+                    break;
+                case 'back-bottom-right':
+                    hotspotTheta = 3 * Math.PI / 4;
+                    hotspotPhi = 3 * Math.PI / 4;
+                    isFront = false;
+                    break;
+            }
+            
+            // 计算与热点的角距离
+            let angularDistance = Math.acos(
+                Math.sin(theta) * Math.sin(hotspotTheta) * Math.cos(phi - hotspotPhi) + 
+                Math.cos(theta) * Math.cos(hotspotTheta)
+            );
+            
+            // 计算信号强度，距离越近信号越强
+            // 基础衰减
+            let dbm = -40 + 40 * Math.exp(-5 * angularDistance);
+            
+            // 添加随机噪声
+            dbm += (Math.random() * 4 - 2); // ±2dBm的随机噪声
+            
+            // 如果是背面方向，并且点在正面，信号减弱
+            if (!isFront && theta < Math.PI / 2) {
+                dbm -= 10 + Math.random() * 10; // 减弱10-20dBm
+            }
+            
+            // 如果是正面方向，并且点在背面，信号减弱
+            if (isFront && theta > Math.PI / 2) {
+                dbm -= 10 + Math.random() * 10; // 减弱10-20dBm
+            }
+            
+            // 确保信号强度不超过0dBm
+            dbm = Math.min(dbm, 0);
+            
+            return dbm;
+        }
+        
+        // 更新图表
+        function updateCharts() {
+            // 准备正面和背面数据
+            const frontData = [];
+            const backData = [];
+            const sphereData = [];
+            
+            // 为每个点创建颜色映射
+            const colorScale = d3.scaleSequential(d3.interpolateBlues)
+                .domain([-40, 0]);
+            
+            samples.forEach(point => {
+                // 计算2D投影坐标
+                let projectedX, projectedY;
+                
+                // 正面投影 (z轴)
+                if (point.z > 0) {
+                    // 归一化到[-1,1]
+                    projectedX = point.x;
+                    projectedY = point.y;
+                    
+                    frontData.push({
+                        x: projectedX,
+                        y: projectedY,
+                        r: 3 + (point.dbm + 40) / 40 * 7, // 半径从3到10
+                        backgroundColor: colorScale(point.dbm)
+                    });
+                }
+                
+                // 背面投影 (-z轴)
+                if (point.z < 0) {
+                    // 归一化到[-1,1]，并镜像
+                    projectedX = -point.x; // 水平镜像
+                    projectedY = point.y;
+                    
+                    backData.push({
+                        x: projectedX,
+                        y: projectedY,
+                        r: 3 + (point.dbm + 40) / 40 * 7, // 半径从3到10
+                        backgroundColor: colorScale(point.dbm)
+                    });
+                }
+                
+                // 3D球面数据
+                sphereData.push({
+                    x: point.x,
+                    y: point.y,
+                    r: 2 + (point.dbm + 40) / 40 * 5, // 半径从2到7
+                    backgroundColor: colorScale(point.dbm),
+                    theta: point.theta,
+                    phi: point.phi,
+                    dbm: point.dbm
+                });
+            });
+            
+            // 更新正面热力图
+            frontHeatmapChart.data.datasets[0] = {
+                data: frontData,
+                pointBackgroundColor: frontData.map(p => p.backgroundColor),
+                pointRadius: frontData.map(p => p.r),
+                pointHoverRadius: frontData.map(p => p.r + 3)
+            };
+            frontHeatmapChart.update();
+            
+            // 更新背面热力图
+            backHeatmapChart.data.datasets[0] = {
+                data: backData,
+                pointBackgroundColor: backData.map(p => p.backgroundColor),
+                pointRadius: backData.map(p => p.r),
+                pointHoverRadius: backData.map(p => p.r + 3)
+            };
+            backHeatmapChart.update();
+            
+            // 更新3D球坐标图
+            spherePlotChart.data.datasets[0] = {
+                data: sphereData,
+                pointBackgroundColor: sphereData.map(p => p.backgroundColor),
+                pointRadius: sphereData.map(p => p.r),
+                pointHoverRadius: sphereData.map(p => p.r + 3)
+            };
+            spherePlotChart.update();
+        }
+        
+        // 计算并更新TRP值
+        function updateTRPValue() {
+            // 使用数值积分方法计算TRP
+            // TRP = ∫∫ P(θ,φ)·sin(θ) dθ dφ
+            // 离散近似: TRP ≈ ΣΣ P(θ_i,φ_j)·sin(θ_i)·Δθ·Δφ
+            
+            // 假设均匀采样
+            const density = parseInt(document.getElementById('sample-density').value);
+            const deltaTheta = Math.PI / (density - 1);
+            const deltaPhi = 2 * Math.PI / (density - 1);
+            
+            let trp = 0;
+            
+            // 按天顶角分组
+            const groups = {};
+            samples.forEach(point => {
+                const thetaIndex = Math.floor(point.theta / deltaTheta);
+                if (!groups[thetaIndex]) groups[thetaIndex] = [];
+                groups[thetaIndex].push(point);
+            });
+            
+            // 计算积分
+            for (const thetaIndex in groups) {
+                const theta = parseInt(thetaIndex) * deltaTheta;
+                const sinTheta = Math.sin(theta);
+                
+                // 对该天顶角下的所有方位角点取平均
+                const groupPoints = groups[thetaIndex];
+                let avgPower = 0;
+                
+                groupPoints.forEach(point => {
+                    // 将dBm转换为线性功率
+                    const linearPower = Math.pow(10, point.dbm / 10);
+                    avgPower += linearPower;
+                });
+                
+                avgPower /= groupPoints.length;
+                
+                // 累加积分项
+                trp += avgPower * sinTheta * deltaTheta * deltaPhi;
+            }
+            
+            // 将线性功率转换回dBm
+            trp = 10 * Math.log10(trp);
+            
+            // 更新显示
+            document.getElementById('trp-value').textContent = trp.toFixed(2);
+        }
+        
+        // 添加D3.js用于颜色映射
+        const d3 = {
+            scaleSequential: function(interpolator) {
+                let domain = [0, 1];
+                
+                function scale(x) {
+                    const t = (x - domain[0]) / (domain[1] - domain[0]);
+                    return interpolator(t);
+                }
+                
+                scale.domain = function(_) {
+                    if (!arguments.length) return domain;
+                    domain = [+_[0], +_[1]];
+                    return scale;
+                };
+                
+                return scale;
+            },
+            interpolateBlues: function(t) {
+                // 简化的蓝色渐变色映射
+                const r = Math.floor(247 - 148 * t);
+                const g = Math.floor(251 - 160 * t);
+                const b = Math.floor(255 - 165 * t);
+                return `rgb(${r}, ${g}, ${b})`;
+            }
+        };
+    </script>
+</body>
+</html>
+    
